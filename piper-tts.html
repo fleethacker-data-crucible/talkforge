@@ -162,7 +162,7 @@
 </head>
 <body>
   <header>
-    <h1>Piper TTS <span style="font-size:0.7rem;color:var(--muted);font-weight:400;">v2.0.7</span></h1>
+    <h1>Piper TTS <span style="font-size:0.7rem;color:var(--muted);font-weight:400;">v2.0.8</span></h1>
     <div class="subtitle">Client-side neural text-to-speech · LibriTTS Medium by default · Fully offline after first load</div>
     <div id="sourceBadge" style="margin-top:0.4rem;font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:6px;display:inline-block;background:#2a2f3a;color:var(--muted);">Loading source…</div>
   </header>
@@ -229,7 +229,7 @@
 
   <script type="module">
     // ========== DEBUG PANEL ==========
-    const PAGE_VERSION = '2.0.7';
+    const PAGE_VERSION = '2.0.8';
 
     const debugPanel = document.getElementById('debugPanel');
     const debugToggle = document.getElementById('debugToggle');
@@ -613,27 +613,50 @@
       setStatus('Generating and playing…', true);
 
       // Pipeline: synthesize the next chunk while the current one plays.
+      // If the user changes voice/speaker, the next section uses the new voice
+      // without interrupting the section that is already playing.
       let nextPromise = null;
-      const startNext = (idx) => {
+      let nextVoice = voiceId;
+      let nextSpeaker = speakerId;
+
+      const currentVoice = () => modelEl.value;
+      const currentSpeaker = () => voiceEl.value;
+
+      const startNext = (idx, v, s) => {
         if (idx >= chunks.length || stopRequested) return null;
         const c = chunks[idx];
-        if (idx === 0 && pregenBlob && pregenKey && pregenKey.startsWith(voiceId + ':' + speakerId)) {
+        if (idx === 0 && pregenBlob && pregenKey && pregenKey.startsWith(v + ':' + s)) {
           const b = pregenBlob;
           pregenBlob = null;
           return Promise.resolve(b);
         }
-        return generateChunk(c, voiceId, speakerId);
+        return generateChunk(c, v, s);
       };
 
-      nextPromise = startNext(0);
+      nextVoice = currentVoice();
+      nextSpeaker = currentSpeaker();
+      nextPromise = startNext(0, nextVoice, nextSpeaker);
 
       for (let i = 0; i < chunks.length && !stopRequested; i++) {
         const chunk = chunks[i];
         setStatus(`Playing ${i + 1}/${chunks.length}…`, true);
         try {
+          // If voice changed since we started synthesizing this chunk, redo it.
+          const liveVoice = currentVoice();
+          const liveSpeaker = currentSpeaker();
+          if (liveVoice !== nextVoice || liveSpeaker !== nextSpeaker) {
+            appendDebug(`Voice changed mid-read; next section uses ${liveVoice} / ${liveSpeaker}`, 'status');
+            nextVoice = liveVoice;
+            nextSpeaker = liveSpeaker;
+            nextPromise = startNext(i, nextVoice, nextSpeaker);
+          }
+
           const blob = await nextPromise;
-          // Kick off the following chunk immediately
-          nextPromise = startNext(i + 1);
+
+          // Start the following chunk with whatever voice is selected now.
+          nextVoice = currentVoice();
+          nextSpeaker = currentSpeaker();
+          nextPromise = startNext(i + 1, nextVoice, nextSpeaker);
 
           generatedBlobs.push(blob);
           const url = URL.createObjectURL(blob);
