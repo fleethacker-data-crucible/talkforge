@@ -11,7 +11,22 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$RELEASE_BASE = 'https://github.com/seakintruth/talkforge/releases/download/v1.0.0'
+function Get-ReleaseBase {
+    if ($env:TALKFORGE_RELEASE_BASE) { return $env:TALKFORGE_RELEASE_BASE }
+    try {
+        $remote = & git remote get-url origin 2>$null
+        if ($remote) {
+            $path = $remote -replace '^(https://github.com/|git@github.com:)', '' -replace '\.git$', ''
+            if ($path -match '^[^/]+/[^/]+$') {
+                return "https://github.com/$path/releases/download/v1.0.0"
+            }
+        }
+    } catch {}
+    return 'https://github.com/seakintruth/talkforge/releases/download/v1.0.0'
+}
+
+$RELEASE_BASE = Get-ReleaseBase
+Write-Host "Using release base: $RELEASE_BASE"
 $HF_BASE = 'https://huggingface.co/rhasspy/piper-voices/resolve/main'
 
 $PIPER_TTS_WEB_VERSION = '1.1.1'

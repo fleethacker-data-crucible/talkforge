@@ -15,7 +15,31 @@ WASM_DIR="${ASSET_ROOT}/wasm"
 MODELS_DIR="${ASSET_ROOT}/models"
 ONNX_WASM_DIR="${WASM_DIR}/onnx"
 
-RELEASE_BASE="https://github.com/seakintruth/talkforge/releases/download/v1.0.0"
+# Detect release base from the fork this script lives in.
+# Priority: TALKFORGE_RELEASE_BASE env, then git remote origin, then default.
+detect_release_base() {
+  if [[ -n "${TALKFORGE_RELEASE_BASE:-}" ]]; then
+    echo "${TALKFORGE_RELEASE_BASE}"
+    return
+  fi
+  local remote_url=""
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    remote_url=$(git remote get-url origin 2>/dev/null || true)
+  fi
+  if [[ -n "${remote_url}" ]]; then
+    # Handle both https://github.com/owner/repo.git and git@github.com:owner/repo.git
+    local path
+    path=$(echo "${remote_url}" | sed -E 's#^(https://github.com/|git@github.com:)##; s#\.git$##')
+    if [[ "${path}" =~ ^[^/]+/[^/]+$ ]]; then
+      echo "https://github.com/${path}/releases/download/v1.0.0"
+      return
+    fi
+  fi
+  echo "https://github.com/seakintruth/talkforge/releases/download/v1.0.0"
+}
+
+RELEASE_BASE="$(detect_release_base)"
+echo "Using release base: ${RELEASE_BASE}"
 HF_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main"
 
 PIPER_TTS_WEB_VERSION="1.1.1"
