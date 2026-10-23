@@ -1,0 +1,32 @@
+{
+  "voices": [
+    {
+      "model": "en_US-libritts_r-medium",
+      "speakerId": 12,
+      "name": "Clear Narrator",
+      "description": "Neutral American male, steady pacing, good for long-form reading.",
+      "rating": 5
+    },
+    {
+      "model": "en_US-libritts_r-medium",
+      "speakerId": 47,
+      "name": "Warm Female",
+      "description": "Conversational American female, slightly expressive.",
+      "rating": 4
+    },
+    {
+      "model": "en_US-lessac-high",
+      "speakerId": 0,
+      "name": "Lessac High",
+      "description": "Single-speaker high-quality American audiobook voice.",
+      "rating": 5
+    },
+    {
+      "model": "en_GB-vctk-medium",
+      "speakerId": 3,
+      "name": "British Male (p250)",
+      "description": "Clear British male from the VCTK set.",
+      "rating": 4
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "models": [
+    {
+      "id": "en_US-libritts_r-medium",
+      "label": "LibriTTS-R Medium (~75 MB, 904 voices)",
+      "default": true
+    },
+    {
+      "id": "en_US-libritts-high",
+      "label": "LibriTTS High (~137 MB, 904 voices)"
+    },
+    {
+      "id": "en_GB-vctk-medium",
+      "label": "VCTK Medium (British, 109 speakers)"
+    },
+    {
+      "id": "en_US-lessac-medium",
+      "label": "Lessac Medium (single speaker)"
+    },
+    {
+      "id": "en_US-lessac-high",
+      "label": "Lessac High (single speaker)"
+    },
+    {
+      "id": "en_US-amy-medium",
+      "label": "Amy Medium (single speaker)"
+    },
+    {
+      "id": "en_US-hfc_female-medium",
+      "label": "HFC Female Medium (single speaker)"
+    },
+    {
+      "id": "en_US-hfc_male-medium",
+      "label": "HFC Male Medium (single speaker)"
+    },
+    {
+      "id": "en_GB-alan-medium",
+      "label": "Alan Medium (British, single speaker)"
+    }
+  ]
+}
