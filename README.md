@@ -24,20 +24,31 @@ Open `piper-tts.html` in a browser. The page prefers local assets and falls back
 
 ## What’s in the repo vs. a Release
 
-| In the repo (cloned) | In a GitHub Release (tagged `v*`) |
-|----------------------|-----------------------------------|
+| In the repo (cloned) | In a GitHub Release (`.0` series only) |
+|----------------------|----------------------------------------|
 | Source, scripts, CI, docs | All `.onnx` model files |
 | Small JS (piper-tts-web, lamejs, engine) | `piper_phonemize.data` (~17 MB) |
 | Small WASM (`piper_phonemize.wasm`) | ONNX Runtime WASM binaries |
-| `.onnx.json` configs | |
+| `.onnx.json` configs | `release-base.txt` stamp |
 
-A Release is created automatically when you push a tag matching `v*`:
+### Asset storage policy
+
+Large model and WASM files are uploaded **only** on series releases that end in `.0` (for example `v1.1.0`).  
+Patch releases (`v1.1.1`, `v1.1.2`, …) reuse those same assets and do not re-upload them.
+
+The populate scripts always request the matching `.0` series URL, so a clone or source zip from any patch release still finds the models.
+
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+# Series release (uploads large assets)
+git tag v1.1.0
+git push origin v1.1.0
+
+# Patch release (stamp only, no large assets)
+git tag v1.1.1
+git push origin v1.1.1
 ```
 
-After the workflow finishes, download the large files from the Release page (or point `populate-assets` at the Release URLs).
+After the workflow finishes, `populate-assets.sh` / `.ps1` / `.bat` will pull the large files from the `.0` release of the repo the script is running in (or from the stamped `assets/release-base.txt`).
 
 ## Features
 
