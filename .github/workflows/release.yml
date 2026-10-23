@@ -49,59 +49,31 @@ jobs:
           chmod +x populate-assets.sh
           ./populate-assets.sh
 
-      - name: Build plain-folder source archive
-        # GitHub's auto source zip/tar.gz always extracts to a versioned folder
-        # (talkforge-1.1.0/). We ship a custom archive that extracts to talkforge/
-        # with a VERSION file inside so upgrades are a simple extract-over.
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          mkdir -p /tmp/talkforge
-          rsync -a --exclude='.git' ./ /tmp/talkforge/
-          echo "$TAG" > /tmp/talkforge/VERSION
-          tar -C /tmp -czf talkforge-src.tar.gz talkforge
-          (cd /tmp && zip -r -q "$GITHUB_WORKSPACE/talkforge-src.zip" talkforge)
-          echo "Built talkforge-src.tar.gz and talkforge-src.zip (extracts to talkforge/)"
-
       - name: Create release and upload assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          NOTES_FILE=$(mktemp)
-          cat > "$NOTES_FILE" << 'EOF'
-          Models and large WASM live on the .0 series release and are reused by patch releases.
-
-          Source archive (extracts to talkforge/ with a VERSION file inside):
-          - talkforge-src.zip
-          - talkforge-src.tar.gz
-
-          Prefer these over the auto-generated source archives if you want a version-free folder name for easier upgrades.
-          EOF
+          NOTES="Models and large WASM live on the .0 series release and are reused by patch releases."
           if [[ "$TAG" == *.0 ]]; then
             gh release create "$TAG" \
               --title "TalkForge $TAG" \
-              --notes-file "$NOTES_FILE" \
+              --notes "$NOTES" \
               --target main \
-              talkforge-src.zip \
-              talkforge-src.tar.gz \
               assets/release-base.txt \
               assets/models/*.onnx \
               assets/wasm/piper_phonemize.data \
               assets/wasm/onnx/*.wasm || \
             gh release upload "$TAG" \
-              talkforge-src.zip \
-              talkforge-src.tar.gz \
               assets/release-base.txt \
               assets/models/*.onnx \
               assets/wasm/piper_phonemize.data \
               assets/wasm/onnx/*.wasm --clobber
           else
-            # Patch release: stamp + plain source archive, no large assets.
+            # Patch release: stamp only, no large assets.
             gh release create "$TAG" \
               --title "TalkForge $TAG" \
-              --notes-file "$NOTES_FILE" \
+              --notes "$NOTES" \
               --target main \
-              talkforge-src.zip \
-              talkforge-src.tar.gz \
               assets/release-base.txt || true
           fi
