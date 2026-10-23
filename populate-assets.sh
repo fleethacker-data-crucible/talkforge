@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # populate-assets.sh
-# Downloads vendor libraries, WASM binaries, and Piper voice models.
-# Prefers assets from the GitHub Release; falls back to CDN / Hugging Face.
+# Downloads assets listed in assets-manifest.json.
+# Prefers the GitHub Release for entries with preferRelease=true.
 #
 # Usage:
 #   chmod +x populate-assets.sh
@@ -10,13 +10,15 @@
 set -euo pipefail
 
 ASSET_ROOT="${ASSET_ROOT:-./assets}"
-VENDOR_DIR="${ASSET_ROOT}/vendor"
-WASM_DIR="${ASSET_ROOT}/wasm"
-MODELS_DIR="${ASSET_ROOT}/models"
-ONNX_WASM_DIR="${WASM_DIR}/onnx"
+MANIFEST="${MANIFEST:-./assets-manifest.json}"
+
+if [[ ! -f "${MANIFEST}" ]]; then
+  echo "Error: manifest not found: ${MANIFEST}" >&2
+  exit 1
+fi
 
 # Detect release base.
-# Priority: TALKFORGE_RELEASE_BASE env, assets/release-base.txt (stamped by CI), git remote, default.
+# Priority: TALKFORGE_RELEASE_BASE env, assets/release-base.txt, git remote, default.
 detect_release_base() {
   if [[ -n "${TALKFORGE_RELEASE_BASE:-}" ]]; then
     echo "${TALKFORGE_RELEASE_BASE}"
@@ -46,8 +48,6 @@ detect_release_base() {
   echo "https://github.com/seakintruth/talkforge/releases/download/v1.0.0"
 }
 
-# Force large-asset downloads to the .0 series release.
-# e.g. https://github.com/owner/repo/releases/download/v1.0.1 → .../v1.0.0
 to_series_base() {
   local url="$1"
   echo "${url}" | sed -E 's#/releases/download/v([0-9]+)\.([0-9]+)\.[0-9]+#/releases/download/v\1.\2.0#'
@@ -55,15 +55,7 @@ to_series_base() {
 
 RELEASE_BASE="$(to_series_base "$(detect_release_base)")"
 echo "Using release base: ${RELEASE_BASE}"
-HF_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main"
-
-PIPER_TTS_WEB_VERSION="1.1.1"
-LAMEJS_VERSION="1.2.1"
-ONNXRUNTIME_WEB_VERSION="1.22.0"
-DIFFUSION_PIPER_WASM_VERSION="1.0.0"
-
-echo "Creating directory structure under ${ASSET_ROOT} ..."
-mkdir -p "${VENDOR_DIR}/dist" "${WASM_DIR}" "${ONNX_WASM_DIR}" "${MODELS_DIR}"
+echo "Reading manifest: ${MANIFEST}"
 
 download() {
   local url="$1"
@@ -85,7 +77,6 @@ download() {
   fi
 }
 
-# Try release URL first; fall back to the given CDN/HF URL
 download_prefer_release() {
   local filename="$1"
   local fallback_url="$2"
@@ -103,74 +94,28 @@ download_prefer_release() {
   download "${fallback_url}" "${dest}"
 }
 
-echo ""
-echo "=== Vendor JavaScript ==="
-
-download \
-  "https://cdn.jsdelivr.net/npm/@realtimex/piper-tts-web@${PIPER_TTS_WEB_VERSION}/dist/piper-tts-web.js" \
-  "${VENDOR_DIR}/piper-tts-web.js"
-
-download \
-  "https://cdn.jsdelivr.net/npm/@realtimex/piper-tts-web@${PIPER_TTS_WEB_VERSION}/dist/piper-o91UDS6e.js" \
-  "${VENDOR_DIR}/dist/piper-o91UDS6e.js"
-
-download \
-  "https://cdn.jsdelivr.net/npm/@realtimex/piper-tts-web@${PIPER_TTS_WEB_VERSION}/dist/voices_static-D_OtJDHM.js" \
-  "${VENDOR_DIR}/dist/voices_static-D_OtJDHM.js"
-
-download \
-  "https://cdn.jsdelivr.net/npm/lamejs@${LAMEJS_VERSION}/lame.min.js" \
-  "${VENDOR_DIR}/lame.min.js"
-
-echo ""
-echo "=== Piper phonemizer WASM ==="
-
-download_prefer_release \
-  "piper_phonemize.wasm" \
-  "https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@${DIFFUSION_PIPER_WASM_VERSION}/build/piper_phonemize.wasm" \
-  "${WASM_DIR}/piper_phonemize.wasm"
-
-download_prefer_release \
-  "piper_phonemize.data" \
-  "https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@${DIFFUSION_PIPER_WASM_VERSION}/build/piper_phonemize.data" \
-  "${WASM_DIR}/piper_phonemize.data"
-
-echo ""
-echo "=== ONNX Runtime Web WASM ==="
-
-for f in ort-wasm-simd-threaded.wasm ort-wasm-simd-threaded.jsep.wasm; do
-  download_prefer_release \
-    "${f}" \
-    "https://cdn.jsdelivr.net/npm/onnxruntime-web@${ONNXRUNTIME_WEB_VERSION}/dist/${f}" \
-    "${ONNX_WASM_DIR}/${f}"
-done
-
-echo ""
-echo "=== Voice models ==="
-
-for model in \
-  "en/en_US/libritts_r/medium/en_US-libritts_r-medium" \
-  "en/en_GB/vctk/medium/en_GB-vctk-medium" \
-  "en/en_US/lessac/medium/en_US-lessac-medium" \
-  "en/en_US/lessac/high/en_US-lessac-high" \
-  "en/en_US/amy/medium/en_US-amy-medium" \
-  "en/en_US/hfc_female/medium/en_US-hfc_female-medium" \
-  "en/en_US/hfc_male/medium/en_US-hfc_male-medium" \
-  "en/en_GB/alan/medium/en_GB-alan-medium" \
-  "en/en_US/libritts/high/en_US-libritts-high"
-do
-  base=$(basename "$model")
-  download_prefer_release \
-    "${base}.onnx" \
-    "${HF_BASE}/${model}.onnx" \
-    "${MODELS_DIR}/${base}.onnx"
-  download_prefer_release \
-    "${base}.onnx.json" \
-    "${HF_BASE}/${model}.onnx.json" \
-    "${MODELS_DIR}/${base}.onnx.json"
+# Parse manifest with python3 (available on the CI runner and most dev machines)
+python3 - "${MANIFEST}" << 'PY' | while IFS=$'\t' read -r dest url prefer; do
+import json, sys
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+for a in data.get("assets", []):
+    dest = a.get("dest", "")
+    url = a.get("url", "")
+    prefer = "1" if a.get("preferRelease") else "0"
+    if dest and url:
+        print(f"{dest}\t{url}\t{prefer}")
+PY
+  full_dest="${ASSET_ROOT}/${dest}"
+  mkdir -p "$(dirname "${full_dest}")"
+  filename=$(basename "${dest}")
+  if [[ "${prefer}" == "1" ]]; then
+    download_prefer_release "${filename}" "${url}" "${full_dest}"
+  else
+    download "${url}" "${full_dest}"
+  fi
 done
 
 echo ""
 echo "Done."
 echo "Assets under: ${ASSET_ROOT}"
-echo "Large files prefer the v1.0.0 Release; missing ones fall back to CDN/Hugging Face."

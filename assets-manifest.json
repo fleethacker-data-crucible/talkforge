@@ -1,0 +1,134 @@
+{
+  "assets": [
+    {
+      "dest": "vendor/piper-tts-web.js",
+      "url": "https://cdn.jsdelivr.net/npm/@realtimex/piper-tts-web@1.1.1/dist/piper-tts-web.js",
+      "preferRelease": false
+    },
+    {
+      "dest": "vendor/dist/piper-o91UDS6e.js",
+      "url": "https://cdn.jsdelivr.net/npm/@realtimex/piper-tts-web@1.1.1/dist/piper-o91UDS6e.js",
+      "preferRelease": false
+    },
+    {
+      "dest": "vendor/dist/voices_static-D_OtJDHM.js",
+      "url": "https://cdn.jsdelivr.net/npm/@realtimex/piper-tts-web@1.1.1/dist/voices_static-D_OtJDHM.js",
+      "preferRelease": false
+    },
+    {
+      "dest": "vendor/lame.min.js",
+      "url": "https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js",
+      "preferRelease": false
+    },
+    {
+      "dest": "wasm/piper_phonemize.wasm",
+      "url": "https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize.wasm",
+      "preferRelease": true
+    },
+    {
+      "dest": "wasm/piper_phonemize.data",
+      "url": "https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize.data",
+      "preferRelease": true
+    },
+    {
+      "dest": "wasm/onnx/ort-wasm-simd-threaded.wasm",
+      "url": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort-wasm-simd-threaded.wasm",
+      "preferRelease": true
+    },
+    {
+      "dest": "wasm/onnx/ort-wasm-simd-threaded.jsep.wasm",
+      "url": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort-wasm-simd-threaded.jsep.wasm",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_US-libritts_r-medium.onnx",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/en_US-libritts_r-medium.onnx",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_US-libritts_r-medium.onnx.json",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/en_US-libritts_r-medium.onnx.json",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_GB-vctk-medium.onnx",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/vctk/medium/en_GB-vctk-medium.onnx",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_GB-vctk-medium.onnx.json",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/vctk/medium/en_GB-vctk-medium.onnx.json",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_US-lessac-medium.onnx",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_US-lessac-medium.onnx.json",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_US-lessac-high.onnx",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/high/en_US-lessac-high.onnx",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_US-lessac-high.onnx.json",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/high/en_US-lessac-high.onnx.json",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_US-amy-medium.onnx",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_US-amy-medium.onnx.json",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_US-hfc_female-medium.onnx",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_female/medium/en_US-hfc_female-medium.onnx",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_US-hfc_female-medium.onnx.json",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_female/medium/en_US-hfc_female-medium.onnx.json",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_US-hfc_male-medium.onnx",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_male/medium/en_US-hfc_male-medium.onnx",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_US-hfc_male-medium.onnx.json",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_male/medium/en_US-hfc_male-medium.onnx.json",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_GB-alan-medium.onnx",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_GB-alan-medium.onnx.json",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx.json",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_US-libritts-high.onnx",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts/high/en_US-libritts-high.onnx",
+      "preferRelease": true
+    },
+    {
+      "dest": "models/en_US-libritts-high.onnx.json",
+      "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts/high/en_US-libritts-high.onnx.json",
+      "preferRelease": true
+    }
+  ]
+}
