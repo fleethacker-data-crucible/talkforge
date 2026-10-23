@@ -1,1 +1,1 @@
-https://github.com/seakintruth/talkforge/releases/download/v1.1.0
+https://github.com/seakintruth/talkforge/releases/download/v1.2.0
