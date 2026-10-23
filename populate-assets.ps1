@@ -30,7 +30,12 @@ function Get-ReleaseBase {
     return 'https://github.com/seakintruth/talkforge/releases/download/v1.0.0'
 }
 
-$RELEASE_BASE = Get-ReleaseBase
+function ConvertTo-SeriesBase([string]$url) {
+    # Force .0 series: .../v1.0.1 → .../v1.0.0
+    return $url -replace '/releases/download/v(\d+)\.(\d+)\.\d+', '/releases/download/v$1.$2.0'
+}
+
+$RELEASE_BASE = ConvertTo-SeriesBase (Get-ReleaseBase)
 Write-Host "Using release base: $RELEASE_BASE"
 $HF_BASE = 'https://huggingface.co/rhasspy/piper-voices/resolve/main'
 

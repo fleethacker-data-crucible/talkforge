@@ -46,7 +46,14 @@ detect_release_base() {
   echo "https://github.com/seakintruth/talkforge/releases/download/v1.0.0"
 }
 
-RELEASE_BASE="$(detect_release_base)"
+# Force large-asset downloads to the .0 series release.
+# e.g. https://github.com/owner/repo/releases/download/v1.0.1 → .../v1.0.0
+to_series_base() {
+  local url="$1"
+  echo "${url}" | sed -E 's#/releases/download/v([0-9]+)\.([0-9]+)\.[0-9]+#/releases/download/v\1.\2.0#'
+}
+
+RELEASE_BASE="$(to_series_base "$(detect_release_base)")"
 echo "Using release base: ${RELEASE_BASE}"
 HF_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main"
 
