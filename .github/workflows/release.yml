@@ -38,7 +38,8 @@ jobs:
             echo "No stamp change; skipping commit."
           else
             git commit -m "Stamp release-base.txt for ${GITHUB_REF#refs/tags/}"
-            git push
+            # Tag checkouts are detached HEAD, so push explicitly to main.
+            git push origin HEAD:main
           fi
 
       - name: Download models and WASM
