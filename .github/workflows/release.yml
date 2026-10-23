@@ -18,8 +18,26 @@ jobs:
       - name: Stamp release base for zip/source downloads
         run: |
           mkdir -p assets
+          # Write the base URL that matches the repo and tag that triggered this run.
+          # Source-zip downloads will contain this file after the commit-back below.
           echo "https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF#refs/tags/}" > assets/release-base.txt
           echo "Stamped: $(cat assets/release-base.txt)"
+
+      - name: Commit stamp back to the repo
+        # Simple commit-back so the next "Code → Download ZIP" contains the correct base.
+        # Uses the default GITHUB_TOKEN (contents: write is already set above).
+        # Pushes with this token do not re-trigger workflows.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/release-base.txt
+          # Only commit if the stamp actually changed
+          if git diff --cached --quiet; then
+            echo "No stamp change; skipping commit."
+          else
+            git commit -m "Stamp release-base.txt for ${GITHUB_REF#refs/tags/}"
+            git push
+          fi
 
       - name: Download models and WASM
         run: |
