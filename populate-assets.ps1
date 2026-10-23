@@ -83,6 +83,8 @@ $raw = Get-Content $Manifest -Raw -Encoding UTF8
 $matches = [regex]::Matches($raw, '"dest"\s*:\s*"([^"]+)"\s*,\s*"url"\s*:\s*"([^"]+)"\s*,\s*"preferRelease"\s*:\s*(true|false)')
 Write-Host "Manifest entries: $($matches.Count)"
 
+# Build the download list first
+$tasks = @()
 foreach ($m in $matches) {
     $destPath = $m.Groups[1].Value
     $url = $m.Groups[2].Value
@@ -91,13 +93,70 @@ foreach ($m in $matches) {
     $dest = Join-Path $AssetRoot $destPath
     $dir = Split-Path $dest -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    if (Test-Path $dest) {
+        Write-Host "  [skip] $(Split-Path $dest -Leaf) already exists"
+        continue
+    }
     $filename = Split-Path $destPath -Leaf
-    if ($preferRelease) {
-        Get-AssetPreferRelease $filename $url $dest
-    } else {
-        Get-Asset $url $dest | Out-Null
+    $releaseUrl = if ($preferRelease) { "$RELEASE_BASE/$filename" } else { $null }
+    $tasks += [pscustomobject]@{
+        Name       = $filename
+        Dest       = $dest
+        ReleaseUrl = $releaseUrl
+        FallbackUrl = $url
     }
 }
+
+Write-Host "Downloading $($tasks.Count) file(s) with up to 8 parallel connections..."
+
+# Download worker (runs inside a runspace)
+$worker = {
+    param($task)
+    function Try-Download($url, $dest) {
+        $retries = 3
+        for ($i = 1; $i -le $retries; $i++) {
+            try {
+                Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing -TimeoutSec 300
+                return $true
+            } catch {
+                if ($i -lt $retries) { Start-Sleep -Seconds 2 }
+            }
+        }
+        return $false
+    }
+    $name = $task.Name
+    if ($task.ReleaseUrl) {
+        if (Try-Download $task.ReleaseUrl $task.Dest) {
+            return "ok-release $name"
+        }
+    }
+    if (Try-Download $task.FallbackUrl $task.Dest) {
+        return "ok-fallback $name"
+    }
+    return "fail $name"
+}
+
+$pool = [runspacefactory]::CreateRunspacePool(1, 8)
+$pool.Open()
+$jobs = @()
+foreach ($task in $tasks) {
+    $ps = [powershell]::Create()
+    $ps.RunspacePool = $pool
+    [void]$ps.AddScript($worker).AddArgument($task)
+    $jobs += [pscustomobject]@{ Pipe = $ps; Handle = $ps.BeginInvoke(); Name = $task.Name }
+}
+
+# Wait and report
+while ($jobs | Where-Object { -not $_.Handle.IsCompleted }) {
+    Start-Sleep -Milliseconds 500
+}
+foreach ($job in $jobs) {
+    $result = $job.Pipe.EndInvoke($job.Handle)
+    Write-Host "  $result"
+    $job.Pipe.Dispose()
+}
+$pool.Close()
+$pool.Dispose()
 
 Write-Host ""
 Write-Host "Done."
