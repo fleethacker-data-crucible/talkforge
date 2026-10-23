@@ -1,1 +1,938 @@
-FULL_CONTENT_PLACEHOLDER
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Piper TTS - Client-Side Text to Speech</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --surface: #1a1d23;
+      --border: #2d323c;
+      --text: #e8eaed;
+      --muted: #9aa0a6;
+      --accent: #7c9cff;
+      --accent-hover: #9bb0ff;
+      --success: #34c759;
+      --danger: #ff453a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    h1 { margin: 0; font-size: 1.25rem; font-weight: 600; }
+    .subtitle { color: var(--muted); font-size: 0.875rem; margin-top: 0.25rem; }
+    main {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 1rem;
+      padding: 1rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+    }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+    }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.35rem; font-weight: 500; }
+    select, textarea, button, input[type="range"] {
+      width: 100%;
+      background: #12141a;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 0.75rem;
+      font-size: 0.95rem;
+    }
+    textarea {
+      min-height: 320px;
+      resize: vertical;
+      font-family: inherit;
+      line-height: 1.5;
+    }
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 0.5rem;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .drop-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(124, 156, 255, 0.08);
+    }
+    .controls { display: flex; flex-direction: column; gap: 0.75rem; }
+    .row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    button {
+      cursor: pointer;
+      background: var(--accent);
+      color: #0f1115;
+      border: none;
+      font-weight: 600;
+      transition: background 0.15s;
+    }
+    button:hover:not(:disabled) { background: var(--accent-hover); }
+    button.secondary { background: #2a2f3a; color: var(--text); }
+    button.secondary:hover:not(:disabled) { background: #353b48; }
+    button.danger { background: var(--danger); color: white; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .status {
+      font-size: 0.85rem;
+      color: var(--muted);
+      min-height: 1.4em;
+    }
+    .status.active { color: var(--success); }
+    .progress {
+      height: 6px;
+      background: #12141a;
+      border-radius: 3px;
+      overflow: hidden;
+      display: none;
+    }
+    .progress.show { display: block; }
+    .progress > div {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.2s;
+    }
+    .mode-group { display: flex; flex-direction: column; gap: 0.4rem; }
+    .mode-group label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .mode-group input { width: auto; }
+    footer {
+      text-align: center;
+      padding: 1rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    #debugPanel {
+      margin: 1rem;
+      max-width: 1400px;
+      margin-left: auto;
+      margin-right: auto;
+      background: #0c0e12;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.75rem;
+      max-height: 320px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    #debugPanel .log { color: #9aa0a6; }
+    #debugPanel .warn { color: #ff9f0a; }
+    #debugPanel .error { color: #ff453a; }
+    #debugPanel .status { color: #34c759; }
+    #debugToggle {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      z-index: 100;
+      background: #2a2f3a;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Piper TTS <span style="font-size:0.7rem;color:var(--muted);font-weight:400;">v2.0.6</span></h1>
+    <div class="subtitle">Client-side neural text-to-speech · LibriTTS Medium by default · Fully offline after first load</div>
+    <div id="sourceBadge" style="margin-top:0.4rem;font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:6px;display:inline-block;background:#2a2f3a;color:var(--muted);">Loading source…</div>
+  </header>
+
+  <main>
+    <div class="panel drop-zone" id="dropZone">
+      <label for="text">Drop or paste text here</label>
+      <textarea id="text" placeholder="Paste a long document, article, or any text. Generation starts in the background as soon as text is available so playback and download stay responsive.">The quick brown fox jumps over the lazy dog. This is a demonstration of client-side Piper text-to-speech running entirely in your browser. You can paste long documents and begin listening immediately while the rest of the text is synthesized in the background.</textarea>
+    </div>
+
+    <div class="panel controls">
+      <div>
+        <label for="model">Model</label>
+        <select id="model">
+          <option value="">Loading models…</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="speed">Speed: <span id="speedValue">1.0×</span></label>
+        <input type="range" id="speed" min="0.5" max="2.0" step="0.1" value="1.0">
+      </div>
+
+      <div>
+        <label for="voice">Voice / Speaker</label>
+        <input type="text" id="voiceSearch" placeholder="Search speakers…" style="margin-bottom:0.3rem;width:100%;">
+        <select id="voice" size="6" style="height:auto;">
+          <option value="0">Loading voices…</option>
+        </select>
+        <div id="voiceNote" style="font-size:0.75rem;color:var(--muted);margin-top:0.3rem;"></div>
+      </div>
+
+      <div>
+        <label>Reading mode</label>
+        <div class="mode-group">
+          <label><input type="radio" name="mode" value="all" checked> Read all</label>
+          <label><input type="radio" name="mode" value="selection"> Read selection</label>
+          <label><input type="radio" name="mode" value="click"> Read at click (click in text)</label>
+        </div>
+      </div>
+
+      <div class="row">
+        <button id="play">Play / Start</button>
+        <button id="stop" class="secondary" disabled>Stop</button>
+      </div>
+      <div class="row">
+        <button id="uploadBtn" class="secondary">Upload text file</button>
+        <input type="file" id="fileInput" accept=".txt,.md,.text,text/plain" style="display:none">
+      </div>
+      <button id="download" class="secondary">Download MP3</button>
+
+      <div class="progress" id="progress"><div></div></div>
+      <div class="status" id="status">Ready. Text changes trigger background preparation.</div>
+    </div>
+  </main>
+
+  <footer id="footerText">
+    Powered by Piper TTS (ONNX Runtime Web). Loading source information…
+  </footer>
+
+  <button id="debugToggle" type="button">Debug</button>
+  <button id="copyDebug" type="button" style="position:fixed;bottom:1rem;right:6.5rem;z-index:100;background:#2a2f3a;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:0.4rem 0.75rem;font-size:0.8rem;cursor:pointer;display:none;">Copy</button>
+  <div id="debugPanel" style="display:none;"></div>
+
+  <script type="module">
+    // ========== DEBUG PANEL ==========
+    const PAGE_VERSION = '2.0.6';
+
+    const debugPanel = document.getElementById('debugPanel');
+    const debugToggle = document.getElementById('debugToggle');
+    const copyDebug = document.getElementById('copyDebug');
+    let debugVisible = false;
+
+    function appendDebug(msg, cls = 'log') {
+      const line = document.createElement('div');
+      line.className = cls;
+      const ts = new Date().toISOString().slice(11, 23);
+      line.textContent = `[${ts}] ${msg}`;
+      debugPanel.appendChild(line);
+      debugPanel.scrollTop = debugPanel.scrollHeight;
+    }
+
+    debugToggle.addEventListener('click', () => {
+      debugVisible = !debugVisible;
+      debugPanel.style.display = debugVisible ? 'block' : 'none';
+      copyDebug.style.display = debugVisible ? 'block' : 'none';
+      debugToggle.textContent = debugVisible ? 'Hide Debug' : 'Debug';
+    });
+
+    copyDebug.addEventListener('click', () => {
+      const text = Array.from(debugPanel.querySelectorAll('div')).map(d => d.textContent).join('\n');
+      navigator.clipboard.writeText(text).then(() => {
+        const orig = copyDebug.textContent;
+        copyDebug.textContent = 'Copied!';
+        setTimeout(() => { copyDebug.textContent = orig; }, 1200);
+      }).catch(() => alert('Clipboard failed'));
+    });
+
+    // Capture console
+    const origLog = console.log;
+    const origWarn = console.warn;
+    const origError = console.error;
+    console.log = (...args) => { origLog.apply(console, args); appendDebug(args.map(String).join(' '), 'log'); };
+    console.warn = (...args) => { origWarn.apply(console, args); appendDebug(args.map(String).join(' '), 'warn'); };
+    console.error = (...args) => { origError.apply(console, args); appendDebug(args.map(String).join(' '), 'error'); };
+
+    window.addEventListener('error', (e) => appendDebug(`Uncaught: ${e.message} (${e.filename}:${e.lineno})`, 'error'));
+    window.addEventListener('unhandledrejection', (e) => appendDebug(`Unhandled rejection: ${e.reason}`, 'error'));
+
+    function setFooter(text) {
+      const el = document.getElementById('footerText');
+      if (el) el.textContent = text;
+    }
+    // =================================
+
+    // ========== LOCAL ASSET CONFIGURATION ==========
+    // Change ASSET_BASE if you serve the assets from a different path.
+    // All vendor JS, WASM, and models are expected under this base.
+    const ASSET_BASE = './assets';
+
+    // CDN fallbacks for development (used only when local files are missing)
+    const CDN = {
+      piper: 'https://cdn.jsdelivr.net/npm/@realtimex/piper-tts-web@1.1.1/+esm',
+      lame: 'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js'
+    };
+
+    async function loadTts() {
+      // The jsDelivr +esm file is not a self-contained bundle; it contains
+      // relative imports that break when served locally. Prefer CDN for the
+      // library itself unless a full local package is later provided.
+      try {
+        // Try local first only if we want to experiment; fall back immediately on any failure
+        const mod = await import(`${ASSET_BASE}/vendor/piper-tts-web.js`);
+        setSourceBadge('local', 'Local assets');
+        return mod;
+      } catch (e) {
+        console.warn('Local piper-tts-web not found or incomplete, falling back to CDN:', e.message);
+        setSourceBadge('cdn', 'CDN fallback (development)');
+        return await import(CDN.piper);
+      }
+    }
+
+    let tts = await loadTts();
+
+    function setSourceBadge(mode, label) {
+      const badge = document.getElementById('sourceBadge');
+      if (!badge) return;
+      badge.textContent = label;
+      if (mode === 'local') {
+        badge.style.background = '#1e3a2f';
+        badge.style.color = '#34c759';
+      } else {
+        badge.style.background = '#3a2e1e';
+        badge.style.color = '#ff9f0a';
+      }
+      setFooter(`Powered by Piper TTS (ONNX Runtime Web) v${PAGE_VERSION}. Source: ${label}. See LOCAL-ASSET-PLAYBOOK.md.`);
+      appendDebug(`Source: ${label}`, 'status');
+    }
+
+    // Lazy-load lamejs (local first, CDN fallback)
+    let lameLoaded = false;
+    async function ensureLame() {
+      if (lameLoaded) return;
+      await new Promise((resolve, reject) => {
+        const tryLocal = () => {
+          const s = document.createElement('script');
+          s.src = `${ASSET_BASE}/vendor/lame.min.js`;
+          s.onload = () => { lameLoaded = true; resolve(); };
+          s.onerror = () => {
+            console.warn('Local lamejs failed, using CDN');
+            setSourceBadge('cdn', 'Local TTS + CDN lamejs');
+            tryCdn();
+          };
+          document.head.appendChild(s);
+        };
+        const tryCdn = () => {
+          const s = document.createElement('script');
+          s.src = CDN.lame;
+          s.onload = () => { lameLoaded = true; resolve(); };
+          s.onerror = () => reject(new Error('Failed to load lamejs from local or CDN'));
+          document.head.appendChild(s);
+        };
+        tryLocal();
+      });
+    }
+
+    // Local WASM paths (CDN fallback is handled by the library itself when paths fail)
+    const LOCAL_WASM_PATHS = {
+      onnxWasm: `${ASSET_BASE}/wasm/onnx/`,
+      piperData: `${ASSET_BASE}/wasm/piper_phonemize.data`,
+      piperWasm: `${ASSET_BASE}/wasm/piper_phonemize.wasm`
+    };
+    // ================================================
+
+    const textEl = document.getElementById('text');
+    const modelEl = document.getElementById('model');
+    const voiceEl = document.getElementById('voice');
+    const speedEl = document.getElementById('speed');
+    const speedValueEl = document.getElementById('speedValue');
+    const playBtn = document.getElementById('play');
+    const stopBtn = document.getElementById('stop');
+    const downloadBtn = document.getElementById('download');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const fileInput = document.getElementById('fileInput');
+    const statusEl = document.getElementById('status');
+    const progressEl = document.getElementById('progress');
+    const progressBar = progressEl.querySelector('div');
+    const dropZone = document.getElementById('dropZone');
+
+    let currentSession = null;
+    let currentVoiceId = null;
+    let isPlaying = false;
+    let stopRequested = false;
+    let audioQueue = [];          // { text, blob, url } for generated chunks
+    let generatedBlobs = [];      // all successful audio blobs for the current text
+    let generationController = null;
+
+    const MULTI_SPEAKER_MODELS = new Set([
+      'en_US-libritts_r-medium',
+      'en_US-libritts-high'
+    ]);
+
+    function setStatus(msg, active = false) {
+      statusEl.textContent = msg;
+      statusEl.classList.toggle('active', active);
+      appendDebug(`Status: ${msg}`, 'status');
+    }
+
+    function showProgress(pct) {
+      progressEl.classList.add('show');
+      progressBar.style.width = Math.min(100, Math.max(0, pct)) + '%';
+    }
+    function hideProgress() {
+      progressEl.classList.remove('show');
+      progressBar.style.width = '0%';
+    }
+
+    // Import pure helpers (also tested under Node)
+    const { splitSentences, filterSpeakers } = await import(`${ASSET_BASE}/vendor/tts-utils.js`);
+
+    // Probe whether local WASM files are actually reachable (avoids file:// and missing-asset failures)
+    let localWasmAvailable = null;
+    async function checkLocalWasm() {
+      if (localWasmAvailable !== null) return localWasmAvailable;
+      try {
+        const resp = await fetch(`${ASSET_BASE}/wasm/piper_phonemize.data`, { method: 'HEAD' });
+        localWasmAvailable = resp.ok;
+      } catch {
+        localWasmAvailable = false;
+      }
+      appendDebug(`Local WASM reachable: ${localWasmAvailable}`, 'status');
+      return localWasmAvailable;
+    }
+
+    async function ensureSession(voiceId, speakerId) {
+      const sessionKey = voiceId + ':' + (speakerId ?? '');
+      appendDebug(`ensureSession called: voiceId=${voiceId} speakerId=${speakerId} key=${sessionKey} currentKey=${currentVoiceId}`, 'status');
+
+      if (currentSession && currentVoiceId === sessionKey) {
+        appendDebug('Reusing existing page-level session (same key)', 'status');
+        return currentSession;
+      }
+
+      // Try to clear library-level caches
+      appendDebug('Clearing library caches if available…', 'status');
+      if (tts.TtsSession && typeof tts.TtsSession.reset === 'function') {
+        try { tts.TtsSession.reset(); appendDebug('Called TtsSession.reset()', 'status'); } catch (e) { appendDebug('reset() failed: ' + e, 'warn'); }
+      }
+      if (typeof tts.flush === 'function') {
+        try { await tts.flush(); appendDebug('Called tts.flush()', 'status'); } catch (e) { appendDebug('flush() failed: ' + e, 'warn'); }
+      }
+      if (tts.TtsSession && tts.TtsSession._instance) {
+        try { tts.TtsSession._instance = null; appendDebug('Cleared TtsSession._instance', 'status'); } catch (_) {}
+      }
+
+      setStatus('Loading model…');
+      showProgress(0);
+      try {
+        const useLocalWasm = await checkLocalWasm();
+        const sessionOpts = {
+          voiceId,
+          progress: (p) => {
+            if (p.total) showProgress((p.loaded / p.total) * 100);
+          },
+          logger: (m) => console.log('[TTS]', m)
+        };
+        if (speakerId != null && MULTI_SPEAKER_MODELS.has(voiceId)) {
+          sessionOpts.speakerId = Number(speakerId);
+        }
+        if (useLocalWasm) {
+          sessionOpts.wasmPaths = LOCAL_WASM_PATHS;
+          appendDebug('Using local WASM paths', 'status');
+        } else {
+          appendDebug('Local WASM not reachable; using library CDN defaults', 'status');
+        }
+
+        appendDebug('Creating TtsSession with opts: ' + JSON.stringify({voiceId: sessionOpts.voiceId, speakerId: sessionOpts.speakerId, hasWasm: !!sessionOpts.wasmPaths}), 'status');
+
+        if (tts.TtsSession) {
+          try {
+            currentSession = new tts.TtsSession(sessionOpts);
+            if (currentSession.waitReady) await currentSession.waitReady;
+            appendDebug('TtsSession created. Methods: ' + Object.getOwnPropertyNames(Object.getPrototypeOf(currentSession)).filter(n => n !== 'constructor').join(', '), 'status');
+          } catch (initErr) {
+            if (String(initErr).includes('dynamically imported module') || String(initErr).includes('error loading')) {
+              appendDebug('Local library incomplete; reloading TTS from CDN…', 'warn');
+              const cdnTts = await import(CDN.piper);
+              tts = cdnTts;
+              setSourceBadge('cdn', 'CDN library (local WASM if available)');
+              currentSession = new cdnTts.TtsSession(sessionOpts);
+              if (currentSession.waitReady) await currentSession.waitReady;
+              appendDebug('CDN TtsSession created. Methods: ' + Object.getOwnPropertyNames(Object.getPrototypeOf(currentSession)).filter(n => n !== 'constructor').join(', '), 'status');
+            } else {
+              throw initErr;
+            }
+          }
+        } else {
+          currentSession = { predict: (text, cb) => tts.predict({ text, voiceId, speakerId }, cb) };
+          appendDebug('Using fallback predict wrapper (no TtsSession)', 'status');
+        }
+        currentVoiceId = sessionKey;
+        hideProgress();
+        setStatus('Model ready (' + voiceId + (speakerId != null ? ' / speaker ' + speakerId : '') + ')');
+        return currentSession;
+      } catch (e) {
+        hideProgress();
+        setStatus('Model load failed: ' + e.message);
+        appendDebug('ensureSession error: ' + e, 'error');
+        throw e;
+      }
+    }
+
+    const voiceSearch = document.getElementById('voiceSearch');
+    let allSpeakers = [];
+
+    async function populateVoices() {
+      const model = modelEl.value;
+      const note = document.getElementById('voiceNote');
+      try {
+        const eng = await ensureEngine(model);
+        allSpeakers = eng.getSpeakers();
+        renderSpeakerList('');
+        if (note) note.textContent = allSpeakers.length > 1
+          ? `${allSpeakers.length} speakers. Type to filter.`
+          : 'Single-speaker model.';
+      } catch (e) {
+        voiceEl.innerHTML = '';
+        const opt = document.createElement('option');
+        opt.value = '0';
+        opt.textContent = 'Default';
+        voiceEl.appendChild(opt);
+        if (note) note.textContent = 'Could not load speakers: ' + e.message;
+      }
+    }
+
+    function renderSpeakerList(filter) {
+      const matches = filterSpeakers(allSpeakers, filter);
+      voiceEl.innerHTML = '';
+      matches.slice(0, 200).forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = String(s.id);
+        opt.textContent = s.name;
+        voiceEl.appendChild(opt);
+      });
+      if (matches.length > 200) {
+        const opt = document.createElement('option');
+        opt.disabled = true;
+        opt.textContent = `… ${matches.length - 200} more (refine search)`;
+        voiceEl.appendChild(opt);
+      }
+      if (matches.length && !voiceEl.value) voiceEl.selectedIndex = 0;
+    }
+
+    voiceSearch.addEventListener('input', () => renderSpeakerList(voiceSearch.value));
+
+    speedEl.addEventListener('input', () => {
+      speedValueEl.textContent = Number(speedEl.value).toFixed(1) + '×';
+    });
+
+    function getSpeed() {
+      return Number(speedEl.value) || 1.0;
+    }
+
+    // ========== MULTI-SPEAKER ENGINE ==========
+    let engine = null;
+    let engineModel = null;
+
+    async function ensureEngine(modelId) {
+      if (engine && engineModel === modelId) return engine;
+      setStatus('Loading model with multi-speaker engine…');
+      showProgress(0);
+      const modelUrl = `${ASSET_BASE}/models/${modelId}.onnx`;
+      const configUrl = `${ASSET_BASE}/models/${modelId}.onnx.json`;
+      const wasmBase = `${ASSET_BASE}/wasm/onnx/`;
+      try {
+        const { PiperEngine } = await import(`${ASSET_BASE}/vendor/piper-engine.js`);
+        engine = await PiperEngine.load(modelUrl, configUrl, wasmBase);
+        engineModel = modelId;
+        appendDebug(`PiperEngine loaded for ${modelId}. Speakers: ${engine.voiceConfig.num_speakers || 1}`, 'status');
+        hideProgress();
+        setStatus('Model ready');
+        return engine;
+      } catch (e) {
+        hideProgress();
+        setStatus('Engine load failed: ' + e.message);
+        appendDebug('PiperEngine error: ' + e, 'error');
+        throw e;
+      }
+    }
+    // ==========================================
+
+    async function generateChunk(text, voiceId, speakerId) {
+      const eng = await ensureEngine(voiceId);
+      const sid = Number(speakerId) || 0;
+      const speed = parseFloat(speedEl.value) || 1.0;
+      appendDebug(`PiperEngine.synthesize voice=${voiceId} speaker=${sid} speed=${speed} textLen=${text.length}`, 'status');
+      const blob = await eng.synthesize(text, sid, speed);
+      appendDebug(`Generated blob size=${blob.size}`, 'status');
+      return blob;
+    }
+
+    // Persistent audio element — created and unlocked inside the user gesture
+    let audioEl = null;
+    function unlockAudio() {
+      if (!audioEl) {
+        audioEl = new Audio();
+        audioEl.preload = 'auto';
+      }
+      // Silent unlock: play a tiny silent buffer so subsequent play() calls succeed on mobile
+      const silent = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=');
+      silent.play().catch(() => {});
+      if (audioEl.play) {
+        const p = audioEl.play();
+        if (p && p.catch) p.catch(() => {});
+        audioEl.pause();
+        audioEl.currentTime = 0;
+      }
+    }
+
+    async function playChunks(chunks, voiceId, speakerId) {
+      isPlaying = true;
+      stopRequested = false;
+      playBtn.disabled = true;
+      stopBtn.disabled = false;
+      generatedBlobs = [];
+      audioQueue = [];
+
+      setStatus('Generating and playing…', true);
+
+      for (let i = 0; i < chunks.length && !stopRequested; i++) {
+        const chunk = chunks[i];
+        setStatus(`Synthesizing ${i + 1}/${chunks.length}…`, true);
+        try {
+          let blob;
+          if (i === 0 && pregenBlob && pregenKey && pregenKey.startsWith(voiceId + ':' + speakerId)) {
+            blob = pregenBlob;
+            appendDebug('Using pre-synthesized first sentence', 'status');
+            pregenBlob = null;
+          } else {
+            blob = await generateChunk(chunk, voiceId, speakerId);
+          }
+          generatedBlobs.push(blob);
+          const url = URL.createObjectURL(blob);
+          audioQueue.push({ text: chunk, blob, url });
+
+          // Reuse the unlocked element
+          audioEl.src = url;
+          audioEl.playbackRate = getSpeed();
+          await new Promise((resolve, reject) => {
+            const onEnd = () => { cleanup(); resolve(); };
+            const onErr = (e) => { cleanup(); reject(e); };
+            const cleanup = () => {
+              audioEl.removeEventListener('ended', onEnd);
+              audioEl.removeEventListener('error', onErr);
+              clearInterval(check);
+            };
+            audioEl.addEventListener('ended', onEnd);
+            audioEl.addEventListener('error', onErr);
+            const playPromise = audioEl.play();
+            if (playPromise && playPromise.catch) {
+              playPromise.catch((err) => {
+                setStatus('Playback blocked (mobile autoplay policy). Tap again or check volume. ' + err.message);
+                cleanup();
+                reject(err);
+              });
+            }
+            const check = setInterval(() => {
+              if (stopRequested) {
+                audioEl.pause();
+                cleanup();
+                resolve();
+              }
+            }, 100);
+          });
+        } catch (e) {
+          console.error(e);
+          setStatus('Error on chunk ' + (i + 1) + ': ' + (e.message || e));
+          break;
+        }
+      }
+
+      isPlaying = false;
+      playBtn.disabled = false;
+      stopBtn.disabled = true;
+      if (!stopRequested) setStatus('Finished. Download is ready.');
+      else setStatus('Stopped.');
+    }
+
+    function getTextToRead() {
+      const mode = document.querySelector('input[name="mode"]:checked').value;
+      const full = textEl.value;
+      if (mode === 'selection') {
+        const start = textEl.selectionStart;
+        const end = textEl.selectionEnd;
+        if (start !== end) return full.slice(start, end);
+        return full; // fallback
+      }
+      if (mode === 'click') {
+        // For click mode, user clicks in textarea; we use selection or cursor position
+        const pos = textEl.selectionStart;
+        return full.slice(pos);
+      }
+      return full;
+    }
+
+    playBtn.addEventListener('click', async () => {
+      // Unlock audio immediately inside the user gesture (critical for Android Chrome)
+      unlockAudio();
+
+      const text = getTextToRead().trim();
+      if (!text) {
+        setStatus('No text to read.');
+        return;
+      }
+      const voiceId = modelEl.value;
+      const speakerId = voiceEl.value;
+      const chunks = splitSentences(text);
+      if (!chunks.length) return;
+      await playChunks(chunks, voiceId, speakerId);
+    });
+
+    stopBtn.addEventListener('click', () => {
+      stopRequested = true;
+      setStatus('Stopping…');
+    });
+
+    // Non-blocking first-sentence pre-synthesis
+    let pregenBlob = null;
+    let pregenKey = null;
+
+    function preSynthesizeFirst() {
+      if (isPlaying) return;
+      const text = textEl.value.trim();
+      if (!text) return;
+      const chunks = splitSentences(text);
+      if (!chunks.length) return;
+      const voiceId = modelEl.value;
+      const speakerId = voiceEl.value;
+      const key = voiceId + ':' + speakerId + ':' + chunks[0].slice(0, 40);
+      if (pregenKey === key && pregenBlob) return; // already done
+      pregenKey = key;
+      pregenBlob = null;
+      appendDebug('Background pre-synthesizing first sentence…', 'status');
+      generateChunk(chunks[0], voiceId, speakerId)
+        .then(blob => {
+          if (pregenKey === key) {
+            pregenBlob = blob;
+            appendDebug('First sentence ready in background', 'status');
+          }
+        })
+        .catch(e => appendDebug('Pre-synth failed: ' + e.message, 'warn'));
+    }
+
+    // Background preparation on text change
+    let prepTimer;
+    textEl.addEventListener('input', () => {
+      clearTimeout(prepTimer);
+      prepTimer = setTimeout(() => {
+        const text = textEl.value.trim();
+        if (!text || isPlaying) return;
+        const chunks = splitSentences(text);
+        if (chunks.length === 0) return;
+        setStatus(`Prepared ${chunks.length} section(s).`, true);
+        preSynthesizeFirst();
+      }, 400);
+    });
+
+    // Click-to-read: start from the click position (do not require Play)
+    textEl.addEventListener('click', () => {
+      if (document.querySelector('input[name="mode"]:checked').value === 'click') {
+        setTimeout(() => {
+          unlockAudio();
+          const text = getTextToRead().trim();
+          if (!text) return;
+          const voiceId = modelEl.value;
+          const speakerId = voiceEl.value;
+          const chunks = splitSentences(text);
+          if (chunks.length) playChunks(chunks, voiceId, speakerId);
+        }, 0);
+      }
+    });
+
+    // Upload text file
+    uploadBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        textEl.value = reader.result;
+        textEl.dispatchEvent(new Event('input'));
+        setStatus('Loaded ' + file.name);
+        appendDebug('Uploaded file: ' + file.name, 'status');
+      };
+      reader.onerror = () => setStatus('Failed to read file');
+      reader.readAsText(file);
+      fileInput.value = ''; // allow re-uploading the same file
+    });
+
+    async function loadModelList() {
+      try {
+        const resp = await fetch(`${ASSET_BASE}/models.json`);
+        if (!resp.ok) throw new Error('models.json not found');
+        const data = await resp.json();
+        modelEl.innerHTML = '';
+        let defaultId = null;
+        for (const m of data.models || []) {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.label || m.id;
+          modelEl.appendChild(opt);
+          if (m.default) defaultId = m.id;
+        }
+        if (defaultId) modelEl.value = defaultId;
+        else if (modelEl.options.length) modelEl.selectedIndex = 0;
+        appendDebug(`Loaded ${modelEl.options.length} models from models.json`, 'status');
+      } catch (e) {
+        appendDebug('models.json load failed: ' + e.message + ' — using fallback list', 'warn');
+        // Fallback static list
+        modelEl.innerHTML = '';
+        const fallback = [
+          { id: 'en_US-libritts_r-medium', label: 'LibriTTS-R Medium' },
+          { id: 'en_US-lessac-medium', label: 'Lessac Medium' }
+        ];
+        fallback.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.label;
+          modelEl.appendChild(opt);
+        });
+      }
+    }
+
+    modelEl.addEventListener('change', () => {
+      currentSession = null;
+      currentVoiceId = null;
+      populateVoices();
+      setStatus('Model changed.');
+      preSynthesizeFirst();
+    });
+    voiceEl.addEventListener('change', () => {
+      currentSession = null;
+      currentVoiceId = null;
+      setStatus('Speaker changed to ' + voiceEl.value);
+      preSynthesizeFirst();
+    });
+    loadModelList().then(() => {
+      populateVoices();
+      // Kick off first-sentence synthesis as soon as the page is ready
+      setTimeout(preSynthesizeFirst, 300);
+    });
+
+    // Drag & drop
+    ['dragenter', 'dragover'].forEach(ev => {
+      dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+      });
+    });
+    ['dragleave', 'drop'].forEach(ev => {
+      dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+      });
+    });
+    dropZone.addEventListener('drop', (e) => {
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('text')) {
+        const reader = new FileReader();
+        reader.onload = () => { textEl.value = reader.result; textEl.dispatchEvent(new Event('input')); };
+        reader.readAsText(file);
+      } else if (e.dataTransfer.getData('text')) {
+        textEl.value = e.dataTransfer.getData('text');
+        textEl.dispatchEvent(new Event('input'));
+      }
+    });
+
+    async function concatAndEncodeMp3(blobs) {
+      if (!blobs.length) throw new Error('No audio to encode');
+      await ensureLame();
+
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const buffers = [];
+      let sampleRate = 22050;
+
+      for (const blob of blobs) {
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+        buffers.push(audioBuffer);
+        sampleRate = audioBuffer.sampleRate;
+      }
+
+      // Concatenate mono channel data
+      const totalLength = buffers.reduce((sum, b) => sum + b.length, 0);
+      const combined = new Float32Array(totalLength);
+      let offset = 0;
+      for (const buf of buffers) {
+        const channel = buf.getChannelData(0);
+        combined.set(channel, offset);
+        offset += channel.length;
+      }
+
+      // Convert Float32 [-1,1] to Int16
+      const samples = new Int16Array(combined.length);
+      for (let i = 0; i < combined.length; i++) {
+        const s = Math.max(-1, Math.min(1, combined[i]));
+        samples[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+
+      const encoder = new lamejs.Mp3Encoder(1, sampleRate, 128);
+      const mp3Data = [];
+      const blockSize = 1152;
+      for (let i = 0; i < samples.length; i += blockSize) {
+        const chunk = samples.subarray(i, i + blockSize);
+        const buf = encoder.encodeBuffer(chunk);
+        if (buf.length > 0) mp3Data.push(buf);
+      }
+      const end = encoder.flush();
+      if (end.length > 0) mp3Data.push(end);
+
+      await ctx.close();
+      return new Blob(mp3Data, { type: 'audio/mpeg' });
+    }
+
+    downloadBtn.addEventListener('click', async () => {
+      if (!generatedBlobs.length) {
+        setStatus('Nothing generated yet. Play first or generate.');
+        return;
+      }
+      setStatus('Encoding MP3 from ' + generatedBlobs.length + ' section(s)…');
+      try {
+        const mp3Blob = await concatAndEncodeMp3(generatedBlobs);
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(mp3Blob);
+        a.download = 'speech.mp3';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        setStatus('MP3 downloaded (' + generatedBlobs.length + ' section(s) concatenated).');
+      } catch (e) {
+        console.error(e);
+        setStatus('MP3 encode failed: ' + e.message + '. Falling back to first section.');
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(generatedBlobs[0]);
+        a.download = 'speech-section-1.wav';
+        a.click();
+      }
+    });
+
+    // Initial warm-up hint
+    setStatus('Ready. On mobile, tap Play (audio is unlocked immediately). First use downloads the model.');
+  </script>
+</body>
+</html>
