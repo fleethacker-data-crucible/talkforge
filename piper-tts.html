@@ -162,7 +162,7 @@
 </head>
 <body>
   <header>
-    <h1>Piper TTS <span style="font-size:0.7rem;color:var(--muted);font-weight:400;">v2.0.9</span></h1>
+    <h1>Piper TTS <span style="font-size:0.7rem;color:var(--muted);font-weight:400;">v2.1.0</span></h1>
     <div class="subtitle">Client-side neural text-to-speech · LibriTTS Medium by default · Fully offline after first load</div>
     <div id="sourceBadge" style="margin-top:0.4rem;font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:6px;display:inline-block;background:#2a2f3a;color:var(--muted);">Loading source…</div>
   </header>
@@ -229,7 +229,7 @@
 
   <script type="module">
     // ========== DEBUG PANEL ==========
-    const PAGE_VERSION = '2.0.9';
+    const PAGE_VERSION = '2.1.0';
 
     const debugPanel = document.getElementById('debugPanel');
     const debugToggle = document.getElementById('debugToggle');
@@ -981,27 +981,63 @@
       return new Blob(mp3Data, { type: 'audio/mpeg' });
     }
 
+    function updateDownloadLabel() {
+      const start = textEl.selectionStart;
+      const end = textEl.selectionEnd;
+      if (start !== end) {
+        downloadBtn.textContent = 'Download Selection as MP3';
+      } else {
+        downloadBtn.textContent = 'Download MP3';
+      }
+    }
+    textEl.addEventListener('select', updateDownloadLabel);
+    textEl.addEventListener('mouseup', updateDownloadLabel);
+    textEl.addEventListener('keyup', updateDownloadLabel);
+    document.addEventListener('selectionchange', updateDownloadLabel);
+
     downloadBtn.addEventListener('click', async () => {
-      if (!generatedBlobs.length) {
-        setStatus('Nothing generated yet. Play first or generate.');
+      const full = textEl.value;
+      const start = textEl.selectionStart;
+      const end = textEl.selectionEnd;
+      const hasSelection = start !== end;
+      const target = hasSelection ? full.slice(start, end) : full;
+      const label = hasSelection ? 'selection' : 'document';
+
+      if (!target.trim()) {
+        setStatus('Nothing to download.');
         return;
       }
-      setStatus('Encoding MP3 from ' + generatedBlobs.length + ' section(s)…');
+
+      const voiceId = modelEl.value;
+      const speakerId = voiceEl.value;
+      const chunks = splitSentences(target.trim());
+      if (!chunks.length) {
+        setStatus('No text to encode.');
+        return;
+      }
+
+      downloadBtn.disabled = true;
+      setStatus(`Generating ${chunks.length} section(s) for ${label}…`, true);
+      const blobs = [];
       try {
-        const mp3Blob = await concatAndEncodeMp3(generatedBlobs);
+        for (let i = 0; i < chunks.length; i++) {
+          setStatus(`Synthesizing ${i + 1}/${chunks.length} for ${label}…`, true);
+          const blob = await generateChunk(chunks[i], voiceId, speakerId);
+          blobs.push(blob);
+        }
+        setStatus(`Encoding MP3 (${blobs.length} section(s))…`, true);
+        const mp3Blob = await concatAndEncodeMp3(blobs);
         const a = document.createElement('a');
         a.href = URL.createObjectURL(mp3Blob);
-        a.download = 'speech.mp3';
+        a.download = hasSelection ? 'speech-selection.mp3' : 'speech.mp3';
         a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-        setStatus('MP3 downloaded (' + generatedBlobs.length + ' section(s) concatenated).');
+        setStatus(`MP3 downloaded (${blobs.length} section(s), ${label}).`);
       } catch (e) {
         console.error(e);
-        setStatus('MP3 encode failed: ' + e.message + '. Falling back to first section.');
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(generatedBlobs[0]);
-        a.download = 'speech-section-1.wav';
-        a.click();
+        setStatus('MP3 failed: ' + (e.message || e));
+      } finally {
+        downloadBtn.disabled = false;
       }
     });
 
