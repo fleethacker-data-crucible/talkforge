@@ -33,13 +33,12 @@ export class PiperEngine {
     if (this.voiceConfig.phoneme_type === 'text') {
       return [Array.from(text.normalize('NFD'))];
     }
-    // Dynamic import of phonemizer (CDN)
     const { phonemize } = await import('https://cdn.jsdelivr.net/npm/phonemizer@1.2.1/+esm');
     const voice = this.voiceConfig.espeak?.voice || 'en-us';
     const phonemes = await phonemize(text, voice);
-    const phonemeText = Array.isArray(phonemes) ? phonemes.join(' ') : String(phonemes || text);
-    const sentences = phonemeText.split(/[.!?]+/).filter(s => s.trim());
-    return sentences.map(s => Array.from(s.trim().normalize('NFD')));
+    const phonemeText = Array.isArray(phonemes) ? phonemes.join('') : String(phonemes || text);
+    // Keep punctuation so the model inserts pauses between sentences.
+    return [Array.from(phonemeText.normalize('NFD'))];
   }
 
   phonemesToIds(textPhonemes) {
