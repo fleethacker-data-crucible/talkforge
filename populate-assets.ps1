@@ -78,23 +78,16 @@ function Get-AssetPreferRelease([string]$Filename, [string]$FallbackUrl, [string
     }
 }
 
-# PowerShell 5.1 ConvertFrom-Json mishandles this array; use JavaScriptSerializer instead.
-Add-Type -AssemblyName System.Web.Extensions
-$json = Get-Content $Manifest -Raw -Encoding UTF8
-$ser = New-Object System.Web.Script.Serialization.JavaScriptSerializer
-$ser.MaxJsonLength = [int]::MaxValue
-$manifest = $ser.DeserializeObject($json)
-$assets = @($manifest['assets'])
-Write-Host "Manifest entries: $($assets.Count)"
+# PowerShell 5.1 JSON parsers are unreliable here; extract fields with regex.
+$raw = Get-Content $Manifest -Raw -Encoding UTF8
+$matches = [regex]::Matches($raw, '"dest"\s*:\s*"([^"]+)"\s*,\s*"url"\s*:\s*"([^"]+)"\s*,\s*"preferRelease"\s*:\s*(true|false)')
+Write-Host "Manifest entries: $($matches.Count)"
 
-foreach ($asset in $assets) {
-    $destPath = $asset['dest']
-    $url = $asset['url']
-    $preferRelease = $asset['preferRelease']
-    if (-not $destPath -or -not $url) {
-        Write-Host "  [skip] invalid entry"
-        continue
-    }
+foreach ($m in $matches) {
+    $destPath = $m.Groups[1].Value
+    $url = $m.Groups[2].Value
+    $preferRelease = ($m.Groups[3].Value -eq 'true')
+    if (-not $destPath -or -not $url) { continue }
     $dest = Join-Path $AssetRoot $destPath
     $dir = Split-Path $dest -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
