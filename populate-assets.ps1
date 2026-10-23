@@ -78,26 +78,31 @@ function Get-AssetPreferRelease([string]$Filename, [string]$FallbackUrl, [string
     }
 }
 
-$manifest = Get-Content $Manifest -Raw -Encoding UTF8 | ConvertFrom-Json
-# PowerShell 5.1 can unwrap single-element arrays; force an array either way.
-$assets = @($manifest.assets)
+# PowerShell 5.1 ConvertFrom-Json mishandles this array; use JavaScriptSerializer instead.
+Add-Type -AssemblyName System.Web.Extensions
+$json = Get-Content $Manifest -Raw -Encoding UTF8
+$ser = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+$ser.MaxJsonLength = [int]::MaxValue
+$manifest = $ser.DeserializeObject($json)
+$assets = @($manifest['assets'])
 Write-Host "Manifest entries: $($assets.Count)"
 
 foreach ($asset in $assets) {
-    if (-not $asset.dest -or -not $asset.url) {
+    $destPath = $asset['dest']
+    $url = $asset['url']
+    $preferRelease = $asset['preferRelease']
+    if (-not $destPath -or -not $url) {
         Write-Host "  [skip] invalid entry"
         continue
     }
-    $dest = Join-Path $AssetRoot $asset.dest
+    $dest = Join-Path $AssetRoot $destPath
     $dir = Split-Path $dest -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-    $filename = Split-Path $asset.dest -Leaf
-    $prefer = $false
-    if ($asset.preferRelease -eq $true -or "$($asset.preferRelease)" -eq 'true') { $prefer = $true }
-    if ($prefer) {
-        Get-AssetPreferRelease $filename $asset.url $dest
+    $filename = Split-Path $destPath -Leaf
+    if ($preferRelease) {
+        Get-AssetPreferRelease $filename $url $dest
     } else {
-        Get-Asset $asset.url $dest | Out-Null
+        Get-Asset $url $dest | Out-Null
     }
 }
 
