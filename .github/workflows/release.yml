@@ -44,7 +44,7 @@ jobs:
 
       - name: Download models and WASM
         # Only fetch large assets when this is a .0 series release.
-        if: endsWith(github.ref, '.0')
+        if: ${{ endsWith(github.ref, '.0') }}
         run: |
           chmod +x populate-assets.sh
           ./populate-assets.sh
@@ -56,10 +56,8 @@ jobs:
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
           mkdir -p /tmp/talkforge
-          # Copy the tree, excluding .git
           rsync -a --exclude='.git' ./ /tmp/talkforge/
           echo "$TAG" > /tmp/talkforge/VERSION
-          # Plain folder name inside the archive
           tar -C /tmp -czf talkforge-src.tar.gz talkforge
           (cd /tmp && zip -r -q "$GITHUB_WORKSPACE/talkforge-src.zip" talkforge)
           echo "Built talkforge-src.tar.gz and talkforge-src.zip (extracts to talkforge/)"
@@ -69,17 +67,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          NOTES="Models and large WASM live on the .0 series release and are reused by patch releases.
+          NOTES_FILE=$(mktemp)
+          cat > "$NOTES_FILE" << 'EOF'
+          Models and large WASM live on the .0 series release and are reused by patch releases.
 
-Source archive (extracts to talkforge/ with a VERSION file inside):
-- talkforge-src.zip
-- talkforge-src.tar.gz
+          Source archive (extracts to talkforge/ with a VERSION file inside):
+          - talkforge-src.zip
+          - talkforge-src.tar.gz
 
-Prefer these over the auto-generated source archives if you want a version-free folder name for easier upgrades."
+          Prefer these over the auto-generated source archives if you want a version-free folder name for easier upgrades.
+          EOF
           if [[ "$TAG" == *.0 ]]; then
             gh release create "$TAG" \
               --title "TalkForge $TAG" \
-              --notes "$NOTES" \
+              --notes-file "$NOTES_FILE" \
               --target main \
               talkforge-src.zip \
               talkforge-src.tar.gz \
@@ -98,7 +99,7 @@ Prefer these over the auto-generated source archives if you want a version-free 
             # Patch release: stamp + plain source archive, no large assets.
             gh release create "$TAG" \
               --title "TalkForge $TAG" \
-              --notes "$NOTES" \
+              --notes-file "$NOTES_FILE" \
               --target main \
               talkforge-src.zip \
               talkforge-src.tar.gz \
