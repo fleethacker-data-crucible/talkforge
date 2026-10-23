@@ -1,26 +1,6 @@
 {
   "assets": [
     {
-      "dest": "vendor/piper-tts-web.js",
-      "url": "https://cdn.jsdelivr.net/npm/@realtimex/piper-tts-web@1.1.1/dist/piper-tts-web.js",
-      "preferRelease": false
-    },
-    {
-      "dest": "vendor/dist/piper-o91UDS6e.js",
-      "url": "https://cdn.jsdelivr.net/npm/@realtimex/piper-tts-web@1.1.1/dist/piper-o91UDS6e.js",
-      "preferRelease": false
-    },
-    {
-      "dest": "vendor/dist/voices_static-D_OtJDHM.js",
-      "url": "https://cdn.jsdelivr.net/npm/@realtimex/piper-tts-web@1.1.1/dist/voices_static-D_OtJDHM.js",
-      "preferRelease": false
-    },
-    {
-      "dest": "vendor/lame.min.js",
-      "url": "https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js",
-      "preferRelease": false
-    },
-    {
       "dest": "wasm/piper_phonemize.wasm",
       "url": "https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize.wasm",
       "preferRelease": true
