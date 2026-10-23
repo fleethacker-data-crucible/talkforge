@@ -13,6 +13,11 @@ $ErrorActionPreference = 'Stop'
 
 function Get-ReleaseBase {
     if ($env:TALKFORGE_RELEASE_BASE) { return $env:TALKFORGE_RELEASE_BASE }
+    $stamp = Join-Path $AssetRoot 'release-base.txt'
+    if (Test-Path $stamp) {
+        $line = (Get-Content $stamp -TotalCount 1).Trim()
+        if ($line) { return $line }
+    }
     try {
         $remote = & git remote get-url origin 2>$null
         if ($remote) {

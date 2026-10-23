@@ -15,19 +15,27 @@ WASM_DIR="${ASSET_ROOT}/wasm"
 MODELS_DIR="${ASSET_ROOT}/models"
 ONNX_WASM_DIR="${WASM_DIR}/onnx"
 
-# Detect release base from the fork this script lives in.
-# Priority: TALKFORGE_RELEASE_BASE env, then git remote origin, then default.
+# Detect release base.
+# Priority: TALKFORGE_RELEASE_BASE env, assets/release-base.txt (stamped by CI), git remote, default.
 detect_release_base() {
   if [[ -n "${TALKFORGE_RELEASE_BASE:-}" ]]; then
     echo "${TALKFORGE_RELEASE_BASE}"
     return
+  fi
+  local stamp="${ASSET_ROOT}/release-base.txt"
+  if [[ -f "${stamp}" ]]; then
+    local line
+    line=$(head -1 "${stamp}" | tr -d '[:space:]')
+    if [[ -n "${line}" ]]; then
+      echo "${line}"
+      return
+    fi
   fi
   local remote_url=""
   if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     remote_url=$(git remote get-url origin 2>/dev/null || true)
   fi
   if [[ -n "${remote_url}" ]]; then
-    # Handle both https://github.com/owner/repo.git and git@github.com:owner/repo.git
     local path
     path=$(echo "${remote_url}" | sed -E 's#^(https://github.com/|git@github.com:)##; s#\.git$##')
     if [[ "${path}" =~ ^[^/]+/[^/]+$ ]]; then
