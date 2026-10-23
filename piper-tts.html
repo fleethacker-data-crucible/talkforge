@@ -162,7 +162,7 @@
 </head>
 <body>
   <header>
-    <h1>Piper TTS <span style="font-size:0.7rem;color:var(--muted);font-weight:400;">v2.0.8</span></h1>
+    <h1>Piper TTS <span style="font-size:0.7rem;color:var(--muted);font-weight:400;">v2.0.9</span></h1>
     <div class="subtitle">Client-side neural text-to-speech · LibriTTS Medium by default · Fully offline after first load</div>
     <div id="sourceBadge" style="margin-top:0.4rem;font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:6px;display:inline-block;background:#2a2f3a;color:var(--muted);">Loading source…</div>
   </header>
@@ -229,7 +229,7 @@
 
   <script type="module">
     // ========== DEBUG PANEL ==========
-    const PAGE_VERSION = '2.0.8';
+    const PAGE_VERSION = '2.0.9';
 
     const debugPanel = document.getElementById('debugPanel');
     const debugToggle = document.getElementById('debugToggle');
@@ -602,6 +602,42 @@
       }
     }
 
+    // Highlight the word currently being spoken and keep it in view.
+    let highlightTimer = null;
+    function stopHighlight() {
+      if (highlightTimer) { clearInterval(highlightTimer); highlightTimer = null; }
+      // Leave the selection where it is so the user can see where reading stopped.
+    }
+    function startHighlight(chunk, fullText) {
+      stopHighlight();
+      const chunkStart = fullText.indexOf(chunk);
+      if (chunkStart < 0) return;
+      const words = [];
+      const re = /\S+/g;
+      let m;
+      while ((m = re.exec(chunk))) {
+        words.push({ start: chunkStart + m.index, end: chunkStart + m.index + m[0].length });
+      }
+      if (!words.length) return;
+
+      const tick = () => {
+        if (!audioEl || audioEl.paused || !audioEl.duration) return;
+        const progress = Math.min(1, audioEl.currentTime / audioEl.duration);
+        const idx = Math.min(words.length - 1, Math.floor(progress * words.length));
+        const w = words[idx];
+        textEl.focus();
+        textEl.setSelectionRange(w.start, w.end);
+        // Scroll the selection into view
+        const lineHeight = parseFloat(getComputedStyle(textEl).lineHeight) || 20;
+        const charsPerLine = Math.max(1, Math.floor(textEl.clientWidth / 8));
+        const line = Math.floor(w.start / charsPerLine);
+        const target = Math.max(0, line * lineHeight - textEl.clientHeight / 3);
+        textEl.scrollTop = target;
+      };
+      highlightTimer = setInterval(tick, 80);
+      tick();
+    }
+
     async function playChunks(chunks, voiceId, speakerId) {
       isPlaying = true;
       stopRequested = false;
@@ -637,6 +673,8 @@
       nextSpeaker = currentSpeaker();
       nextPromise = startNext(0, nextVoice, nextSpeaker);
 
+      const fullText = textEl.value;
+
       for (let i = 0; i < chunks.length && !stopRequested; i++) {
         const chunk = chunks[i];
         setStatus(`Playing ${i + 1}/${chunks.length}…`, true);
@@ -664,6 +702,7 @@
 
           audioEl.src = url;
           audioEl.playbackRate = getSpeed();
+          startHighlight(chunk, fullText);
           await new Promise((resolve, reject) => {
             const onEnd = () => { cleanup(); resolve(); };
             const onErr = (e) => { cleanup(); reject(e); };
@@ -671,6 +710,7 @@
               audioEl.removeEventListener('ended', onEnd);
               audioEl.removeEventListener('error', onErr);
               clearInterval(check);
+              stopHighlight();
             };
             audioEl.addEventListener('ended', onEnd);
             audioEl.addEventListener('error', onErr);
@@ -697,6 +737,7 @@
         }
       }
 
+      stopHighlight();
       isPlaying = false;
       playBtn.disabled = false;
       stopBtn.disabled = true;
