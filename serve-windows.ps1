@@ -136,17 +136,20 @@ try {
             # Prevent path traversal
             if (-not $full.StartsWith($Root, [StringComparison]::OrdinalIgnoreCase)) {
                 $res.StatusCode = 403
+                Write-Log "$($req.HttpMethod) /$rel -> 403"
             } elseif (Test-Path $full -PathType Leaf) {
                 Send-File $res $full $req
+                Write-Log "$($req.HttpMethod) /$rel -> $($res.StatusCode)"
             } else {
                 $res.StatusCode = 404
                 $msg = [Text.Encoding]::UTF8.GetBytes("Not found: $rel")
                 $res.ContentType = 'text/plain'
                 $res.ContentLength64 = $msg.Length
                 $res.OutputStream.Write($msg, 0, $msg.Length)
+                Write-Log "$($req.HttpMethod) /$rel -> 404"
             }
         } catch {
-            Write-Log "Request error: $_"
+            Write-Log "Request error for $($req.Url.LocalPath): $_"
             try { $res.StatusCode = 500 } catch {}
         } finally {
             try { $res.Close() } catch {}

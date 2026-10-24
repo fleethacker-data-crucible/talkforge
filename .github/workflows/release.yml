@@ -11,9 +11,9 @@ permissions:
 jobs:
   release:
     name: Build and attach assets
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Stamp release base for zip/source downloads
         run: |
@@ -63,12 +63,12 @@ jobs:
               assets/release-base.txt \
               assets/models/*.onnx \
               assets/wasm/piper_phonemize.data \
-              assets/wasm/onnx/*.wasm || \
+              assets/vendor/onnx/*.wasm || \
             gh release upload "$TAG" \
               assets/release-base.txt \
               assets/models/*.onnx \
               assets/wasm/piper_phonemize.data \
-              assets/wasm/onnx/*.wasm --clobber
+              assets/vendor/onnx/*.wasm --clobber
           else
             # Patch release: stamp only, no large assets.
             gh release create "$TAG" \

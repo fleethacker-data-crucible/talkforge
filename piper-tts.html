@@ -162,7 +162,7 @@
 </head>
 <body>
   <header>
-    <h1>Piper TTS <span style="font-size:0.7rem;color:var(--muted);font-weight:400;">v2.1.0</span></h1>
+    <h1>Piper TTS <span style="font-size:0.7rem;color:var(--muted);font-weight:400;">v2.2.2</span></h1>
     <div class="subtitle">Client-side neural text-to-speech · LibriTTS Medium by default · Fully offline after first load</div>
     <div id="sourceBadge" style="margin-top:0.4rem;font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:6px;display:inline-block;background:#2a2f3a;color:var(--muted);">Loading source…</div>
   </header>
@@ -187,12 +187,35 @@
       </div>
 
       <div>
+        <label for="volume">Volume: <span id="volumeValue">100%</span></label>
+        <input type="range" id="volume" min="0" max="1" step="0.05" value="1">
+      </div>
+
+      <div>
+        <label for="sectionLen">Section length</label>
+        <select id="sectionLen">
+          <option value="sentence">Sentence</option>
+          <option value="20">20 words</option>
+          <option value="40" selected>40 words</option>
+        </select>
+      </div>
+
+      <div>
         <label for="voice">Voice / Speaker</label>
         <input type="text" id="voiceSearch" placeholder="Search speakers…" style="margin-bottom:0.3rem;width:100%;">
         <select id="voice" size="6" style="height:auto;">
           <option value="0">Loading voices…</option>
         </select>
+        <div class="row" style="margin-top:0.3rem;">
+          <button id="favBtn" class="secondary" type="button" title="Star this speaker">★ Favorite</button>
+          <button id="previewBtn" class="secondary" type="button">Preview</button>
+        </div>
         <div id="voiceNote" style="font-size:0.75rem;color:var(--muted);margin-top:0.3rem;"></div>
+      </div>
+
+      <div>
+        <label for="sampleText">Preview sentence</label>
+        <input type="text" id="sampleText" value="This is a sample of the selected voice.">
       </div>
 
       <div>
@@ -205,17 +228,35 @@
       </div>
 
       <div class="row">
-        <button id="play">Play / Start</button>
+        <button id="play">Play</button>
+        <button id="pause" class="secondary" type="button" disabled>Pause</button>
         <button id="stop" class="secondary" disabled>Stop</button>
+      </div>
+      <div class="row">
+        <button id="prevSec" class="secondary" type="button" disabled>Prev</button>
+        <button id="nextSec" class="secondary" type="button" disabled>Next</button>
       </div>
       <div class="row">
         <button id="uploadBtn" class="secondary">Upload text file</button>
         <input type="file" id="fileInput" accept=".txt,.md,.text,text/plain" style="display:none">
+        <button id="clearBtn" class="secondary" type="button">Clear</button>
       </div>
-      <button id="download" class="secondary">Download MP3</button>
+      <div class="row">
+        <button id="download" class="secondary">Download MP3</button>
+        <button id="downloadWav" class="secondary" type="button">Download WAV</button>
+      </div>
+      <div class="row">
+        <button id="themeBtn" class="secondary" type="button">Light theme</button>
+      </div>
+
+      <div>
+        <label for="pronounce">Pronunciation overrides (word=say, one per line)</label>
+        <textarea id="pronounce" style="min-height:4rem;font-size:0.85rem;" placeholder="NATO=nay toe&#10;SQL=sequel"></textarea>
+      </div>
 
       <div class="progress" id="progress"><div></div></div>
-      <div class="status" id="status">Ready. Text changes trigger background preparation.</div>
+      <div class="status" id="status">Ready.</div>
+      <div class="status" id="eta"></div>
     </div>
   </main>
 
@@ -229,7 +270,7 @@
 
   <script type="module">
     // ========== DEBUG PANEL ==========
-    const PAGE_VERSION = '2.1.0';
+    const PAGE_VERSION = '2.2.2';
 
     const debugPanel = document.getElementById('debugPanel');
     const debugToggle = document.getElementById('debugToggle');
@@ -279,33 +320,10 @@
     // =================================
 
     // ========== LOCAL ASSET CONFIGURATION ==========
-    // Change ASSET_BASE if you serve the assets from a different path.
-    // All vendor JS, WASM, and models are expected under this base.
+    // Local assets only. After populate-assets has run, the page needs no network.
     const ASSET_BASE = './assets';
 
-    // CDN fallbacks for development (used only when local files are missing)
-    const CDN = {
-      piper: 'https://cdn.jsdelivr.net/npm/@realtimex/piper-tts-web@1.1.1/+esm',
-      lame: 'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js'
-    };
-
-    async function loadTts() {
-      // The jsDelivr +esm file is not a self-contained bundle; it contains
-      // relative imports that break when served locally. Prefer CDN for the
-      // library itself unless a full local package is later provided.
-      try {
-        // Try local first only if we want to experiment; fall back immediately on any failure
-        const mod = await import(`${ASSET_BASE}/vendor/piper-tts-web.js`);
-        setSourceBadge('local', 'Local assets');
-        return mod;
-      } catch (e) {
-        console.warn('Local piper-tts-web not found or incomplete, falling back to CDN:', e.message);
-        setSourceBadge('cdn', 'CDN fallback (development)');
-        return await import(CDN.piper);
-      }
-    }
-
-    let tts = await loadTts();
+    setSourceBadge('local', 'Local assets');
 
     function setSourceBadge(mode, label) {
       const badge = document.getElementById('sourceBadge');
@@ -322,40 +340,18 @@
       appendDebug(`Source: ${label}`, 'status');
     }
 
-    // Lazy-load lamejs (local first, CDN fallback)
+    // Lazy-load lamejs from local assets only
     let lameLoaded = false;
     async function ensureLame() {
       if (lameLoaded) return;
       await new Promise((resolve, reject) => {
-        const tryLocal = () => {
-          const s = document.createElement('script');
-          s.src = `${ASSET_BASE}/vendor/lame.min.js`;
-          s.onload = () => { lameLoaded = true; resolve(); };
-          s.onerror = () => {
-            console.warn('Local lamejs failed, using CDN');
-            setSourceBadge('cdn', 'Local TTS + CDN lamejs');
-            tryCdn();
-          };
-          document.head.appendChild(s);
-        };
-        const tryCdn = () => {
-          const s = document.createElement('script');
-          s.src = CDN.lame;
-          s.onload = () => { lameLoaded = true; resolve(); };
-          s.onerror = () => reject(new Error('Failed to load lamejs from local or CDN'));
-          document.head.appendChild(s);
-        };
-        tryLocal();
+        const s = document.createElement('script');
+        s.src = `${ASSET_BASE}/vendor/lame.min.js`;
+        s.onload = () => { lameLoaded = true; resolve(); };
+        s.onerror = () => reject(new Error('Failed to load local lamejs. Run populate-assets first.'));
+        document.head.appendChild(s);
       });
     }
-
-    // Local WASM paths (CDN fallback is handled by the library itself when paths fail)
-    const LOCAL_WASM_PATHS = {
-      onnxWasm: `${ASSET_BASE}/wasm/onnx/`,
-      piperData: `${ASSET_BASE}/wasm/piper_phonemize.data`,
-      piperWasm: `${ASSET_BASE}/wasm/piper_phonemize.wasm`
-    };
-    // ================================================
 
     const textEl = document.getElementById('text');
     const modelEl = document.getElementById('model');
@@ -363,8 +359,22 @@
     const speedEl = document.getElementById('speed');
     const speedValueEl = document.getElementById('speedValue');
     const playBtn = document.getElementById('play');
+    const pauseBtn = document.getElementById('pause');
     const stopBtn = document.getElementById('stop');
+    const prevBtn = document.getElementById('prevSec');
+    const nextBtn = document.getElementById('nextSec');
     const downloadBtn = document.getElementById('download');
+    const downloadWavBtn = document.getElementById('downloadWav');
+    const clearBtn = document.getElementById('clearBtn');
+    const previewBtn = document.getElementById('previewBtn');
+    const favBtn = document.getElementById('favBtn');
+    const themeBtn = document.getElementById('themeBtn');
+    const volumeEl = document.getElementById('volume');
+    const volumeValueEl = document.getElementById('volumeValue');
+    const sectionLenEl = document.getElementById('sectionLen');
+    const sampleTextEl = document.getElementById('sampleText');
+    const pronounceEl = document.getElementById('pronounce');
+    const etaEl = document.getElementById('eta');
     const uploadBtn = document.getElementById('uploadBtn');
     const fileInput = document.getElementById('fileInput');
     const statusEl = document.getElementById('status');
@@ -375,7 +385,11 @@
     let currentSession = null;
     let currentVoiceId = null;
     let isPlaying = false;
+    let isPaused = false;
     let stopRequested = false;
+    let skipDir = 0;          // -1 prev, 1 next, 0 none
+    let currentChunkIndex = 0;
+    let favorites = new Set();
     let audioQueue = [];          // { text, blob, url } for generated chunks
     let generatedBlobs = [];      // all successful audio blobs for the current text
     let generationController = null;
@@ -403,95 +417,13 @@
     // Import pure helpers (also tested under Node)
     const { splitSentences, filterSpeakers } = await import(`${ASSET_BASE}/vendor/tts-utils.js`);
 
-    // Probe whether local WASM files are actually reachable (avoids file:// and missing-asset failures)
-    let localWasmAvailable = null;
+    // Probe whether local phonemize data is reachable
     async function checkLocalWasm() {
-      if (localWasmAvailable !== null) return localWasmAvailable;
       try {
         const resp = await fetch(`${ASSET_BASE}/wasm/piper_phonemize.data`, { method: 'HEAD' });
-        localWasmAvailable = resp.ok;
+        return resp.ok;
       } catch {
-        localWasmAvailable = false;
-      }
-      appendDebug(`Local WASM reachable: ${localWasmAvailable}`, 'status');
-      return localWasmAvailable;
-    }
-
-    async function ensureSession(voiceId, speakerId) {
-      const sessionKey = voiceId + ':' + (speakerId ?? '');
-      appendDebug(`ensureSession called: voiceId=${voiceId} speakerId=${speakerId} key=${sessionKey} currentKey=${currentVoiceId}`, 'status');
-
-      if (currentSession && currentVoiceId === sessionKey) {
-        appendDebug('Reusing existing page-level session (same key)', 'status');
-        return currentSession;
-      }
-
-      // Try to clear library-level caches
-      appendDebug('Clearing library caches if available…', 'status');
-      if (tts.TtsSession && typeof tts.TtsSession.reset === 'function') {
-        try { tts.TtsSession.reset(); appendDebug('Called TtsSession.reset()', 'status'); } catch (e) { appendDebug('reset() failed: ' + e, 'warn'); }
-      }
-      if (typeof tts.flush === 'function') {
-        try { await tts.flush(); appendDebug('Called tts.flush()', 'status'); } catch (e) { appendDebug('flush() failed: ' + e, 'warn'); }
-      }
-      if (tts.TtsSession && tts.TtsSession._instance) {
-        try { tts.TtsSession._instance = null; appendDebug('Cleared TtsSession._instance', 'status'); } catch (_) {}
-      }
-
-      setStatus('Loading model…');
-      showProgress(0);
-      try {
-        const useLocalWasm = await checkLocalWasm();
-        const sessionOpts = {
-          voiceId,
-          progress: (p) => {
-            if (p.total) showProgress((p.loaded / p.total) * 100);
-          },
-          logger: (m) => console.log('[TTS]', m)
-        };
-        if (speakerId != null && MULTI_SPEAKER_MODELS.has(voiceId)) {
-          sessionOpts.speakerId = Number(speakerId);
-        }
-        if (useLocalWasm) {
-          sessionOpts.wasmPaths = LOCAL_WASM_PATHS;
-          appendDebug('Using local WASM paths', 'status');
-        } else {
-          appendDebug('Local WASM not reachable; using library CDN defaults', 'status');
-        }
-
-        appendDebug('Creating TtsSession with opts: ' + JSON.stringify({voiceId: sessionOpts.voiceId, speakerId: sessionOpts.speakerId, hasWasm: !!sessionOpts.wasmPaths}), 'status');
-
-        if (tts.TtsSession) {
-          try {
-            currentSession = new tts.TtsSession(sessionOpts);
-            if (currentSession.waitReady) await currentSession.waitReady;
-            appendDebug('TtsSession created. Methods: ' + Object.getOwnPropertyNames(Object.getPrototypeOf(currentSession)).filter(n => n !== 'constructor').join(', '), 'status');
-          } catch (initErr) {
-            if (String(initErr).includes('dynamically imported module') || String(initErr).includes('error loading')) {
-              appendDebug('Local library incomplete; reloading TTS from CDN…', 'warn');
-              const cdnTts = await import(CDN.piper);
-              tts = cdnTts;
-              setSourceBadge('cdn', 'CDN library (local WASM if available)');
-              currentSession = new cdnTts.TtsSession(sessionOpts);
-              if (currentSession.waitReady) await currentSession.waitReady;
-              appendDebug('CDN TtsSession created. Methods: ' + Object.getOwnPropertyNames(Object.getPrototypeOf(currentSession)).filter(n => n !== 'constructor').join(', '), 'status');
-            } else {
-              throw initErr;
-            }
-          }
-        } else {
-          currentSession = { predict: (text, cb) => tts.predict({ text, voiceId, speakerId }, cb) };
-          appendDebug('Using fallback predict wrapper (no TtsSession)', 'status');
-        }
-        currentVoiceId = sessionKey;
-        hideProgress();
-        setStatus('Model ready (' + voiceId + (speakerId != null ? ' / speaker ' + speakerId : '') + ')');
-        return currentSession;
-      } catch (e) {
-        hideProgress();
-        setStatus('Model load failed: ' + e.message);
-        appendDebug('ensureSession error: ' + e, 'error');
-        throw e;
+        return false;
       }
     }
 
@@ -545,6 +477,78 @@
     function getSpeed() {
       return Number(speedEl.value) || 1.0;
     }
+    function getVolume() {
+      return Number(volumeEl.value);
+    }
+    function getMaxWords() {
+      const v = sectionLenEl.value;
+      if (v === 'sentence') return 1000;
+      return Number(v) || 40;
+    }
+    function applyPronunciation(text) {
+      const rules = (pronounceEl.value || '').split('\n').map(l => l.trim()).filter(l => l.includes('='));
+      let out = text;
+      for (const rule of rules) {
+        const [from, to] = rule.split('=').map(s => s.trim());
+        if (!from || !to) continue;
+        out = out.replace(new RegExp('\\b' + from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), to);
+      }
+      return out;
+    }
+    function estimateEta(chunks, fromIndex) {
+      const remaining = chunks.slice(fromIndex).join(' ');
+      const words = remaining.trim() ? remaining.trim().split(/\s+/).length : 0;
+      const wps = 2.6 * getSpeed();
+      const secs = Math.round(words / wps);
+      const m = Math.floor(secs / 60);
+      const s = secs % 60;
+      etaEl.textContent = words ? `About ${m}:${String(s).padStart(2, '0')} remaining (${words} words)` : '';
+    }
+
+    // Persist preferences
+    function savePrefs() {
+      const prefs = {
+        model: modelEl.value,
+        speaker: voiceEl.value,
+        speed: speedEl.value,
+        volume: volumeEl.value,
+        sectionLen: sectionLenEl.value,
+        sample: sampleTextEl.value,
+        theme: document.body.dataset.theme || 'dark',
+        favorites: [...favorites]
+      };
+      localStorage.setItem('talkforge-prefs', JSON.stringify(prefs));
+    }
+    function loadPrefs() {
+      try {
+        const prefs = JSON.parse(localStorage.getItem('talkforge-prefs') || '{}');
+        if (prefs.speed) { speedEl.value = prefs.speed; speedValueEl.textContent = Number(prefs.speed).toFixed(1) + '×'; }
+        if (prefs.volume != null) { volumeEl.value = prefs.volume; volumeValueEl.textContent = Math.round(prefs.volume * 100) + '%'; }
+        if (prefs.sectionLen) sectionLenEl.value = prefs.sectionLen;
+        if (prefs.sample) sampleTextEl.value = prefs.sample;
+        if (prefs.theme === 'light') applyTheme('light');
+        if (Array.isArray(prefs.favorites)) favorites = new Set(prefs.favorites);
+        return prefs;
+      } catch { return {}; }
+    }
+    function applyTheme(mode) {
+      document.body.dataset.theme = mode;
+      if (mode === 'light') {
+        document.documentElement.style.setProperty('--bg', '#f6f7f9');
+        document.documentElement.style.setProperty('--surface', '#ffffff');
+        document.documentElement.style.setProperty('--border', '#d8dce3');
+        document.documentElement.style.setProperty('--text', '#1a1d23');
+        document.documentElement.style.setProperty('--muted', '#5c6570');
+        themeBtn.textContent = 'Dark theme';
+      } else {
+        document.documentElement.style.setProperty('--bg', '#0f1115');
+        document.documentElement.style.setProperty('--surface', '#1a1d23');
+        document.documentElement.style.setProperty('--border', '#2d323c');
+        document.documentElement.style.setProperty('--text', '#e8eaed');
+        document.documentElement.style.setProperty('--muted', '#9aa0a6');
+        themeBtn.textContent = 'Light theme';
+      }
+    }
 
     // ========== MULTI-SPEAKER ENGINE ==========
     let engine = null;
@@ -556,10 +560,14 @@
       showProgress(0);
       const modelUrl = `${ASSET_BASE}/models/${modelId}.onnx`;
       const configUrl = `${ASSET_BASE}/models/${modelId}.onnx.json`;
-      const wasmBase = `${ASSET_BASE}/wasm/onnx/`;
+      const wasmBase = `${ASSET_BASE}/vendor/onnx/`;
+      const phonemePaths = {
+        wasm: `${ASSET_BASE}/wasm/piper_phonemize.wasm`,
+        data: `${ASSET_BASE}/wasm/piper_phonemize.data`
+      };
       try {
         const { PiperEngine } = await import(`${ASSET_BASE}/vendor/piper-engine.js`);
-        engine = await PiperEngine.load(modelUrl, configUrl, wasmBase);
+        engine = await PiperEngine.load(modelUrl, configUrl, wasmBase, phonemePaths);
         engineModel = modelId;
         appendDebug(`PiperEngine loaded for ${modelId}. Speakers: ${engine.voiceConfig.num_speakers || 1}`, 'status');
         hideProgress();
@@ -610,51 +618,44 @@
     }
     function startHighlight(chunk, fullText) {
       stopHighlight();
-      const chunkStart = fullText.indexOf(chunk);
-      if (chunkStart < 0) return;
-      const words = [];
-      const re = /\S+/g;
-      let m;
-      while ((m = re.exec(chunk))) {
-        words.push({ start: chunkStart + m.index, end: chunkStart + m.index + m[0].length });
-      }
-      if (!words.length) return;
+      // Don't override the user's selection in Read selection mode.
+      const mode = document.querySelector('input[name="mode"]:checked')?.value;
+      if (mode === 'selection') return;
 
-      const tick = () => {
-        if (!audioEl || audioEl.paused || !audioEl.duration) return;
-        const progress = Math.min(1, audioEl.currentTime / audioEl.duration);
-        const idx = Math.min(words.length - 1, Math.floor(progress * words.length));
-        const w = words[idx];
-        textEl.focus();
-        textEl.setSelectionRange(w.start, w.end);
-        // Scroll the selection into view
-        const lineHeight = parseFloat(getComputedStyle(textEl).lineHeight) || 20;
-        const charsPerLine = Math.max(1, Math.floor(textEl.clientWidth / 8));
-        const line = Math.floor(w.start / charsPerLine);
-        const target = Math.max(0, line * lineHeight - textEl.clientHeight / 3);
-        textEl.scrollTop = target;
-      };
-      highlightTimer = setInterval(tick, 80);
-      tick();
+      const words = chunk.trim().split(/\s+/).filter(Boolean);
+      if (!words.length) return;
+      const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      const m = new RegExp(escaped.join('\\s+')).exec(fullText);
+      if (!m) return;
+
+      // Select the whole section (stable) rather than guessing the current word.
+      textEl.focus();
+      textEl.setSelectionRange(m.index, m.index + m[0].length);
+      const lineHeight = parseFloat(getComputedStyle(textEl).lineHeight) || 20;
+      const charsPerLine = Math.max(1, Math.floor(textEl.clientWidth / 8));
+      const line = Math.floor(m.index / charsPerLine);
+      textEl.scrollTop = Math.max(0, line * lineHeight - textEl.clientHeight / 3);
     }
 
     async function playChunks(chunks, voiceId, speakerId) {
       isPlaying = true;
+      isPaused = false;
       stopRequested = false;
+      skipDir = 0;
       playBtn.disabled = true;
+      pauseBtn.disabled = false;
       stopBtn.disabled = false;
+      prevBtn.disabled = false;
+      nextBtn.disabled = false;
       generatedBlobs = [];
       audioQueue = [];
 
       setStatus('Generating and playing…', true);
 
-      // Pipeline: synthesize the next chunk while the current one plays.
-      // If the user changes voice/speaker, the next section uses the new voice
-      // without interrupting the section that is already playing.
-      let nextPromise = null;
-      let nextVoice = voiceId;
-      let nextSpeaker = speakerId;
-
+      // Pipeline: keep two sections synthesized ahead.
+      // A voice change discards prefetched audio and applies on the next section.
+      const LOOKAHEAD = 4;
+      const queue = []; // { idx, promise, voice, speaker }
       const currentVoice = () => modelEl.value;
       const currentSpeaker = () => voiceEl.value;
 
@@ -669,32 +670,37 @@
         return generateChunk(c, v, s);
       };
 
-      nextVoice = currentVoice();
-      nextSpeaker = currentSpeaker();
-      nextPromise = startNext(0, nextVoice, nextSpeaker);
+      const fillQueue = () => {
+        while (queue.length < LOOKAHEAD) {
+          const idx = queue.length ? queue[queue.length - 1].idx + 1 : 0;
+          if (idx >= chunks.length) break;
+          const v = currentVoice();
+          const s = currentSpeaker();
+          queue.push({ idx, promise: startNext(idx, v, s), voice: v, speaker: s });
+        }
+      };
+      fillQueue();
 
       const fullText = textEl.value;
 
       for (let i = 0; i < chunks.length && !stopRequested; i++) {
+        if (skipDir === 1) { skipDir = 0; continue; }
+        if (skipDir === -1) { skipDir = 0; i = Math.max(0, i - 2); }
+        currentChunkIndex = i;
         const chunk = chunks[i];
         setStatus(`Playing ${i + 1}/${chunks.length}…`, true);
+        estimateEta(chunks, i);
         try {
-          // If voice changed since we started synthesizing this chunk, redo it.
+          let item = queue.shift();
           const liveVoice = currentVoice();
           const liveSpeaker = currentSpeaker();
-          if (liveVoice !== nextVoice || liveSpeaker !== nextSpeaker) {
-            appendDebug(`Voice changed mid-read; next section uses ${liveVoice} / ${liveSpeaker}`, 'status');
-            nextVoice = liveVoice;
-            nextSpeaker = liveSpeaker;
-            nextPromise = startNext(i, nextVoice, nextSpeaker);
+          if (!item || item.voice !== liveVoice || item.speaker !== liveSpeaker) {
+            appendDebug(`Voice changed; section ${i + 1} uses ${liveVoice} / ${liveSpeaker}`, 'status');
+            item = { idx: i, promise: startNext(i, liveVoice, liveSpeaker), voice: liveVoice, speaker: liveSpeaker };
+            queue.length = 0;
           }
-
-          const blob = await nextPromise;
-
-          // Start the following chunk with whatever voice is selected now.
-          nextVoice = currentVoice();
-          nextSpeaker = currentSpeaker();
-          nextPromise = startNext(i + 1, nextVoice, nextSpeaker);
+          const blob = await item.promise;
+          fillQueue();
 
           generatedBlobs.push(blob);
           const url = URL.createObjectURL(blob);
@@ -702,6 +708,7 @@
 
           audioEl.src = url;
           audioEl.playbackRate = getSpeed();
+          audioEl.volume = getVolume();
           startHighlight(chunk, fullText);
           await new Promise((resolve, reject) => {
             const onEnd = () => { cleanup(); resolve(); };
@@ -717,17 +724,18 @@
             const playPromise = audioEl.play();
             if (playPromise && playPromise.catch) {
               playPromise.catch((err) => {
-                setStatus('Playback blocked (mobile autoplay policy). Tap again or check volume. ' + err.message);
+                setStatus('Playback blocked. Tap again or check volume. ' + err.message);
                 cleanup();
                 reject(err);
               });
             }
             const check = setInterval(() => {
-              if (stopRequested) {
+              if (stopRequested || skipDir !== 0) {
                 audioEl.pause();
                 cleanup();
                 resolve();
               }
+              if (isPaused) audioEl.pause();
             }, 100);
           });
         } catch (e) {
@@ -739,8 +747,13 @@
 
       stopHighlight();
       isPlaying = false;
+      isPaused = false;
       playBtn.disabled = false;
+      pauseBtn.disabled = true;
       stopBtn.disabled = true;
+      prevBtn.disabled = true;
+      nextBtn.disabled = true;
+      etaEl.textContent = '';
       if (!stopRequested) setStatus('Finished. Download is ready.');
       else setStatus('Stopped.');
     }
@@ -766,22 +779,108 @@
       // Unlock audio immediately inside the user gesture (critical for Android Chrome)
       unlockAudio();
 
-      const text = getTextToRead().trim();
+      const text = applyPronunciation(getTextToRead().trim());
       if (!text) {
         setStatus('No text to read.');
         return;
       }
       const voiceId = modelEl.value;
       const speakerId = voiceEl.value;
-      const chunks = splitSentences(text);
+      const chunks = splitSentences(text, getMaxWords());
       if (!chunks.length) return;
       await playChunks(chunks, voiceId, speakerId);
     });
 
     stopBtn.addEventListener('click', () => {
       stopRequested = true;
+      isPaused = false;
       setStatus('Stopping…');
     });
+    pauseBtn.addEventListener('click', () => {
+      if (!isPlaying) return;
+      isPaused = !isPaused;
+      pauseBtn.textContent = isPaused ? 'Resume' : 'Pause';
+      if (!isPaused) audioEl.play();
+      setStatus(isPaused ? 'Paused.' : 'Resumed.');
+    });
+    prevBtn.addEventListener('click', () => { if (isPlaying) skipDir = -1; });
+    nextBtn.addEventListener('click', () => { if (isPlaying) skipDir = 1; });
+    clearBtn.addEventListener('click', () => { textEl.value = ''; setStatus('Cleared.'); });
+    previewBtn.addEventListener('click', async () => {
+      unlockAudio();
+      const text = applyPronunciation(sampleTextEl.value.trim() || 'This is a sample of the selected voice.');
+      const chunks = splitSentences(text, getMaxWords());
+      if (!chunks.length) return;
+      await playChunks(chunks, modelEl.value, voiceEl.value);
+    });
+    favBtn.addEventListener('click', () => {
+      const id = modelEl.value + ':' + voiceEl.value;
+      if (favorites.has(id)) favorites.delete(id);
+      else favorites.add(id);
+      favBtn.textContent = favorites.has(id) ? '★ Favorited' : '★ Favorite';
+      savePrefs();
+    });
+    themeBtn.addEventListener('click', () => {
+      const next = (document.body.dataset.theme === 'light') ? 'dark' : 'light';
+      applyTheme(next);
+      savePrefs();
+    });
+    volumeEl.addEventListener('input', () => {
+      volumeValueEl.textContent = Math.round(getVolume() * 100) + '%';
+      if (audioEl) audioEl.volume = getVolume();
+      savePrefs();
+    });
+    sectionLenEl.addEventListener('change', savePrefs);
+    sampleTextEl.addEventListener('change', savePrefs);
+    speedEl.addEventListener('change', savePrefs);
+    modelEl.addEventListener('change', () => {
+      savePrefs();
+      const id = modelEl.value + ':' + voiceEl.value;
+      favBtn.textContent = favorites.has(id) ? '★ Favorited' : '★ Favorite';
+    });
+    voiceEl.addEventListener('change', () => {
+      savePrefs();
+      const id = modelEl.value + ':' + voiceEl.value;
+      favBtn.textContent = favorites.has(id) ? '★ Favorited' : '★ Favorite';
+    });
+
+    downloadWavBtn.addEventListener('click', async () => {
+      const full = textEl.value;
+      const start = textEl.selectionStart;
+      const end = textEl.selectionEnd;
+      const hasSelection = start !== end;
+      const target = applyPronunciation(hasSelection ? full.slice(start, end) : full);
+      if (!target.trim()) { setStatus('Nothing to download.'); return; }
+      const chunks = splitSentences(target.trim(), getMaxWords());
+      downloadWavBtn.disabled = true;
+      const blobs = [];
+      try {
+        for (let i = 0; i < chunks.length; i++) {
+          setStatus(`Synthesizing ${i + 1}/${chunks.length} for WAV…`, true);
+          blobs.push(await generateChunk(chunks[i], modelEl.value, voiceEl.value));
+        }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob(blobs, { type: 'audio/wav' }));
+        a.download = hasSelection ? 'speech-selection.wav' : 'speech.wav';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        setStatus(`WAV downloaded (${blobs.length} section(s)).`);
+      } catch (e) {
+        setStatus('WAV failed: ' + (e.message || e));
+      } finally {
+        downloadWavBtn.disabled = false;
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target === textEl || e.target === pronounceEl || e.target === sampleTextEl || e.target === voiceSearch) return;
+      if (e.code === 'Space') { e.preventDefault(); isPlaying ? pauseBtn.click() : playBtn.click(); }
+      else if (e.code === 'Escape') stopBtn.click();
+      else if (e.code === 'ArrowRight') nextBtn.click();
+      else if (e.code === 'ArrowLeft') prevBtn.click();
+    });
+
+    loadPrefs();
 
     // Non-blocking first-sentence pre-synthesis
     let pregenBlob = null;
@@ -1010,7 +1109,7 @@
 
       const voiceId = modelEl.value;
       const speakerId = voiceEl.value;
-      const chunks = splitSentences(target.trim());
+      const chunks = splitSentences(applyPronunciation(target.trim()), getMaxWords());
       if (!chunks.length) {
         setStatus('No text to encode.');
         return;

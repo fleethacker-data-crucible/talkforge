@@ -1,20 +1,28 @@
 // tts-utils.js — pure functions for Piper TTS page (testable under Node)
 
-export function splitSentences(text) {
-  if (!text || !text.trim()) return [];
-  const parts = text.match(/[^.!?]+[.!?]+|\S+/g) || [text];
+// Collapse consecutive whitespace and newlines so blank lines don't become long pauses.
+export function normalizeWhitespace(text) {
+  if (!text) return '';
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+// Split on sentence boundaries, with a word-count cap so speaker changes land quickly.
+export function splitSentences(text, maxWords = 40) {
+  const normalized = normalizeWhitespace(text);
+  if (!normalized) return [];
+  const sentences = normalized.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [normalized];
   const chunks = [];
-  let current = '';
-  for (const p of parts) {
-    if ((current + p).length > 280 && current) {
-      chunks.push(current.trim());
-      current = p;
-    } else {
-      current += (current ? ' ' : '') + p;
+  for (const sentence of sentences) {
+    const words = sentence.trim().split(/\s+/).filter(Boolean);
+    if (words.length <= maxWords) {
+      if (words.length) chunks.push(words.join(' '));
+      continue;
+    }
+    for (let i = 0; i < words.length; i += maxWords) {
+      chunks.push(words.slice(i, i + maxWords).join(' '));
     }
   }
-  if (current.trim()) chunks.push(current.trim());
-  return chunks.filter(c => c.length > 0);
+  return chunks;
 }
 
 export function pcmToWavArrayBuffer(float32, sampleRate) {

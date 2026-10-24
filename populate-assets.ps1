@@ -127,13 +127,13 @@ $worker = {
     $name = $task.Name
     if ($task.ReleaseUrl) {
         if (Try-Download $task.ReleaseUrl $task.Dest) {
-            return "ok-release $name"
+            return "release  $name  <-  $($task.ReleaseUrl)"
         }
     }
     if (Try-Download $task.FallbackUrl $task.Dest) {
-        return "ok-fallback $name"
+        return "fallback $name  <-  $($task.FallbackUrl)"
     }
-    return "fail $name"
+    return "FAIL     $name  (tried release and $($task.FallbackUrl))"
 }
 
 $pool = [runspacefactory]::CreateRunspacePool(1, 8)
@@ -150,6 +150,8 @@ foreach ($task in $tasks) {
 while ($jobs | Where-Object { -not $_.Handle.IsCompleted }) {
     Start-Sleep -Milliseconds 500
 }
+Write-Host ""
+Write-Host "Sources:"
 foreach ($job in $jobs) {
     $result = $job.Pipe.EndInvoke($job.Handle)
     Write-Host "  $result"

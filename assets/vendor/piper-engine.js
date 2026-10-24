@@ -1,65 +1,73 @@
-// piper-engine.js — multi-speaker Piper TTS using ONNX Runtime Web + phonemizer
+// piper-engine.js — multi-speaker Piper TTS using ONNX Runtime Web + local piper_phonemize
 // Based on the approach from clowerweb/piper-tts-web-demo
 
 export class PiperEngine {
-  constructor(voiceConfig, session, ort) {
+  constructor(voiceConfig, session, ort, phonemizeFactory, phonemePaths) {
     this.voiceConfig = voiceConfig;
     this.session = session;
     this.ort = ort;
+    this.phonemizeFactory = phonemizeFactory;
+    this.phonemePaths = phonemePaths;
   }
 
-  static async load(modelUrl, configUrl, wasmPaths) {
-    const ort = await import('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.mjs');
-    // Only set wasmPaths if it is an absolute URL; relative paths get incorrectly
-    // resolved against the CDN module URL and break loading.
-    if (wasmPaths && (wasmPaths.startsWith('http') || wasmPaths.startsWith('/'))) {
-      ort.env.wasm.wasmPaths = wasmPaths;
+  static async load(modelUrl, configUrl, wasmPaths, phonemePaths) {
+    // Local ONNX Runtime Web (no CDN). wasmPaths must be absolute and must
+    // point at the directory that contains both the .mjs loaders and the .wasm
+    // files (assets/vendor/onnx/).
+    const ort = await import('./onnx/ort.min.mjs');
+    if (wasmPaths) {
+      const abs = wasmPaths.startsWith('http') || wasmPaths.startsWith('/')
+        ? wasmPaths
+        : new URL(wasmPaths, window.location.href).href;
+      ort.env.wasm.wasmPaths = abs;
     }
-    // otherwise leave the default CDN wasmPaths so the runtime can load its own files
 
-    const [modelBuf, config] = await Promise.all([
+    const [modelBuf, config, phonemizeMod] = await Promise.all([
       fetch(modelUrl).then(r => r.arrayBuffer()),
-      fetch(configUrl).then(r => r.json())
+      fetch(configUrl).then(r => r.json()),
+      import('./dist/piper-o91UDS6e.js')
     ]);
 
     const session = await ort.InferenceSession.create(modelBuf, {
       executionProviders: ['wasm']
     });
 
-    return new PiperEngine(config, session, ort);
+    const factory = phonemizeMod.createPiperPhonemize || phonemizeMod.default;
+    return new PiperEngine(config, session, ort, factory, phonemePaths || {});
   }
 
-  async textToPhonemes(text) {
-    if (this.voiceConfig.phoneme_type === 'text') {
-      return [Array.from(text.normalize('NFD'))];
-    }
-    const { phonemize } = await import('https://cdn.jsdelivr.net/npm/phonemizer@1.2.1/+esm');
+  async textToPhonemeIds(text) {
     const voice = this.voiceConfig.espeak?.voice || 'en-us';
-    const phonemes = await phonemize(text, voice);
-    const phonemeText = Array.isArray(phonemes) ? phonemes.join('') : String(phonemes || text);
-    // Keep punctuation so the model inserts pauses between sentences.
-    return [Array.from(phonemeText.normalize('NFD'))];
-  }
-
-  phonemesToIds(textPhonemes) {
-    const idMap = this.voiceConfig.phoneme_id_map;
-    const BOS = '^', EOS = '$', PAD = '_';
-    const ids = [];
-    for (const sentence of textPhonemes) {
-      ids.push(idMap[BOS], idMap[PAD]);
-      for (const ph of sentence) {
-        if (ph in idMap) {
-          ids.push(idMap[ph], idMap[PAD]);
-        }
+    const input = JSON.stringify([{ text: text.trim() }]);
+    const paths = this.phonemePaths || {};
+    const phonemeIds = await new Promise(async (resolve, reject) => {
+      try {
+        const module = await this.phonemizeFactory({
+          print: (data) => {
+            try { resolve(JSON.parse(data).phoneme_ids); }
+            catch (e) { reject(e); }
+          },
+          printErr: (message) => reject(new Error(message)),
+          locateFile: (url) => {
+            if (url.endsWith('.wasm') && paths.wasm) return paths.wasm;
+            if (url.endsWith('.data') && paths.data) return paths.data;
+            return url;
+          }
+        });
+        module.callMain([
+          '-l', voice,
+          '--input', input,
+          '--espeak_data', '/espeak-ng-data'
+        ]);
+      } catch (e) {
+        reject(e);
       }
-      ids.push(idMap[EOS]);
-    }
-    return ids;
+    });
+    return phonemeIds;
   }
 
   async synthesize(text, speakerId = 0, lengthScale = 1.0) {
-    const textPhonemes = await this.textToPhonemes(text);
-    const phonemeIds = this.phonemesToIds(textPhonemes);
+    const phonemeIds = await this.textToPhonemeIds(text);
 
     const noiseScale = this.voiceConfig.inference?.noise_scale ?? 0.667;
     const noiseW = this.voiceConfig.inference?.noise_w ?? 0.8;

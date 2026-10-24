@@ -66,7 +66,7 @@ download() {
     echo "  [skip] ${name} already exists"
     return 0
   fi
-  echo "  [get]  ${name}"
+  echo "  [get]  ${name} <- ${url}"
   if command -v curl >/dev/null 2>&1; then
     curl -fL --retry 3 --retry-delay 2 -o "${dest}" "${url}"
   elif command -v wget >/dev/null 2>&1; then
@@ -86,12 +86,14 @@ download_prefer_release() {
     echo "  [skip] $(basename "${dest}") already exists"
     return 0
   fi
-  echo "  [try]  $(basename "${dest}") from release"
+  echo "  [try]  $(basename "${dest}") from release: ${release_url}"
   if download "${release_url}" "${dest}" 2>/dev/null; then
+    echo "  [got]  $(basename "${dest}") <- ${release_url}"
     return 0
   fi
-  echo "  [fallback] $(basename "${dest}")"
+  echo "  [fallback] $(basename "${dest}") <- ${fallback_url}"
   download "${fallback_url}" "${dest}"
+  echo "  [got]  $(basename "${dest}") <- ${fallback_url}"
 }
 
 # Parse manifest with python3 (available on the CI runner and most dev machines)

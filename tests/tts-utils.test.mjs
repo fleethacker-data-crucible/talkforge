@@ -26,18 +26,25 @@ test('splitSentences single sentence', () => {
   assert.equal(out[0], 'Hello world.');
 });
 
-test('splitSentences multiple punctuation stays one chunk under 280', () => {
+test('splitSentences multiple punctuation is one section each', () => {
   const out = splitSentences('One. Two! Three?');
-  assert.equal(out.length, 1);
-  assert.ok(out[0].includes('One.'));
-  assert.ok(out[0].includes('Three?'));
+  assert.equal(out.length, 3);
+  assert.equal(out[0], 'One.');
+  assert.equal(out[2], 'Three?');
 });
 
-test('splitSentences respects chunk size', () => {
-  const long = 'word '.repeat(100);
-  const out = splitSentences(long);
+test('splitSentences collapses blank lines', () => {
+  const out = splitSentences('Hello.\n\n\nWorld.');
+  assert.equal(out.length, 2);
+  assert.equal(out[0], 'Hello.');
+  assert.equal(out[1], 'World.');
+});
+
+test('splitSentences respects word cap', () => {
+  const long = Array.from({ length: 100 }, (_, i) => 'word' + i).join(' ');
+  const out = splitSentences(long, 40);
   assert.ok(out.length > 1);
-  for (const c of out) assert.ok(c.length <= 300);
+  for (const c of out) assert.ok(c.split(/\s+/).length <= 40);
 });
 
 test('pcmToWavArrayBuffer header', () => {
