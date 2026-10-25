@@ -4,3 +4,9 @@
 !.env.example
 !.env.sample
 !.env.template
+
+# Downloaded Piper/ONNX runtime assets (populate-assets) and local server log
+assets/**/*.onnx
+assets/**/*.wasm
+assets/**/*.data
+serve-windows.log

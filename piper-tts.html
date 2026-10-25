@@ -540,7 +540,7 @@
         if (prefs.volume != null) { volumeEl.value = prefs.volume; volumeValueEl.textContent = Math.round(prefs.volume * 100) + '%'; }
         if (prefs.sectionLen) sectionLenEl.value = prefs.sectionLen;
         if (prefs.sample) sampleTextEl.value = prefs.sample;
-        if (prefs.theme === 'light') applyTheme('light');
+        applyTheme(prefs.theme === 'light' ? 'light' : 'dark');
         if (Array.isArray(prefs.favorites)) favorites = new Set(prefs.favorites);
         return prefs;
       } catch { return {}; }
