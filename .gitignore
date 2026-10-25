@@ -10,3 +10,14 @@ assets/**/*.onnx
 assets/**/*.wasm
 assets/**/*.data
 serve-windows.log
+
+# FleetHacker standard additions
+Logs/
+logs/
+*.log
+testResults.xml
+temp/
+*.tmp
+Thumbs.db
+desktop.ini
+.vs/

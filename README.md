@@ -1,5 +1,7 @@
 # TalkForge
 
+> client-side neural text-to-speech (Piper, ONNX Runtime Web/WASM) with offline local assets.
+
 Client-side neural text-to-speech in the browser. Runs Piper TTS models entirely in-browser (ONNX Runtime Web + WASM) with multi-speaker support, local-asset offline mode, and simple static servers for Linux and constrained Windows environments.
 
 ## Quick start

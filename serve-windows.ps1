@@ -1,4 +1,4 @@
-# serve-windows.ps1 — static file server for Piper TTS (PowerShell 5.1, no admin, localhost only)
+﻿# serve-windows.ps1 — static file server for Piper TTS (PowerShell 5.1, no admin, localhost only)
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File .\serve-windows.ps1
 #   powershell -ExecutionPolicy Bypass -File .\serve-windows.ps1 -Port 26000

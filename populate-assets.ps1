@@ -1,4 +1,4 @@
-# populate-assets.ps1 — reads assets-manifest.json
+﻿# populate-assets.ps1 — reads assets-manifest.json
 # Prefers the GitHub Release for entries with preferRelease=true.
 #
 # Usage:
