@@ -22,6 +22,8 @@ populate-assets.bat           # optional: downloads large models
 serve.bat                     # starts the local server and opens the page
 ```
 
+`serve.bat` uses port block **25000-25009** (edge-ops PORTS.md). Launching it while TalkForge is already running opens the running copy instead of starting another; an older running copy is asked to stop (`POST /__fleethacker/shutdown`) and replaced. `-Port <n>` uses exactly that port. `GET http://127.0.0.1:<port>/__fleethacker/id` reports the running tool, version (the page's `PAGE_VERSION`), pid and script path.
+
 Open `piper-tts.html` in a browser. The page prefers local assets and falls back to CDN for development.
 
 ## What’s in the repo vs. a Release

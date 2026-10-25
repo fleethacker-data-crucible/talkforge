@@ -1,7 +1,7 @@
 ﻿# serve-windows.ps1 — static file server for Piper TTS (PowerShell 5.1, no admin, localhost only)
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File .\serve-windows.ps1
-#   powershell -ExecutionPolicy Bypass -File .\serve-windows.ps1 -Port 26000
+#   powershell -ExecutionPolicy Bypass -File .\serve-windows.ps1 -Port 25005   (exact port; default is the 25000-25009 block)
 #   powershell -ExecutionPolicy Bypass -File .\serve-windows.ps1 -NoBrowser
 
 param(
@@ -51,26 +51,30 @@ $mime = @{
     '.txt'  = 'text/plain; charset=utf-8'
 }
 
-function Test-PortFree([int]$p) {
-    try {
-        $l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $p)
-        $l.Start()
-        $l.Stop()
-        return $true
-    } catch { return $false }
+# Port block 25000-25009, policy reuse (edge-ops PORTS.md). An explicit -Port is used exactly.
+Import-Module (Join-Path $PSScriptRoot 'FleetPort.psm1') -Force
+$version = '0.0.0'
+$page = Join-Path $PSScriptRoot 'piper-tts.html'
+if ((Test-Path -LiteralPath $page) -and ([IO.File]::ReadAllText($page) -match "PAGE_VERSION\s*=\s*'([0-9.]+)'")) { $version = $Matches[1] }
+$selfPath = [IO.Path]::GetFullPath($PSCommandPath)
+$fleetArgs = @{ Tool = 'talkforge'; Version = $version; RegistryPath = (Join-Path $PSScriptRoot 'FleetPorts.psd1'); NoListener = $true }
+if ($PSBoundParameters.ContainsKey('Port')) { $fleetArgs.Start = $Port; $fleetArgs.Size = 1 }
+try { $slot = Resolve-FleetPort @fleetArgs } catch { Show-Fatal $_.Exception.Message }
+if ($slot.Action -eq 'Reuse') {
+    $page = "http://127.0.0.1:$($slot.Port)/piper-tts.html"
+    if ($slot.Note) { Write-Log $slot.Note }
+    Write-Log "TalkForge $($slot.Existing.Version) is already running: $page"
+    if (-not $NoBrowser) { try { Start-Process $page } catch {} }
+    exit 0
 }
-
-# Find a free port starting at $Port
-$chosen = $Port
-while (-not (Test-PortFree $chosen)) {
-    $chosen++
-    if ($chosen -gt 65535) { Show-Fatal "No free port found starting from $Port" }
-}
+$chosen = $slot.Port
 if ($chosen -ne $Port) { Write-Log "Port $Port in use. Using $chosen instead." }
 
 $prefix = "http://127.0.0.1:$chosen/"
 $listener = [System.Net.HttpListener]::new()
 $listener.Prefixes.Add($prefix)
+# Second prefix so /__fleethacker/id answers the FleetPort probe (Host: localhost:<port>).
+$listener.Prefixes.Add("http://localhost:$chosen/")
 
 try { $listener.Start() }
 catch { Show-Fatal "Failed to start listener on $prefix : $_" }
@@ -131,6 +135,12 @@ try {
         $req = $ctx.Request
         $res = $ctx.Response
         try {
+            $fleet = Invoke-FleetIdEndpoint -Context $ctx -Tool 'talkforge' -Version $version -Path $selfPath
+            if ($fleet) {
+                Write-Log "$($req.HttpMethod) $($req.Url.AbsolutePath) -> $fleet"
+                if ($fleet -eq 'shutdown') { $listener.Stop() }
+                continue
+            }
             $rel = [System.Uri]::UnescapeDataString($req.Url.LocalPath).TrimStart('/')
             if ([string]::IsNullOrEmpty($rel)) { $rel = 'piper-tts.html' }
             $full = [IO.Path]::GetFullPath((Join-Path $Root $rel))
