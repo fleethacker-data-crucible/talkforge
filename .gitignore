@@ -1,3 +1,15 @@
+# Local environment files (secrets)
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Downloaded Piper/ONNX runtime assets (populate-assets) and local server log
+assets/**/*.onnx
+assets/**/*.wasm
+assets/**/*.data
+serve-windows.log
 
 # FleetHacker standard additions
 Logs/

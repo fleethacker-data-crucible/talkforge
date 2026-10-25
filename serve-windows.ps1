@@ -44,6 +44,7 @@ $mime = @{
     '.data' = 'application/octet-stream'
     '.svg'  = 'image/svg+xml'
     '.png'  = 'image/png'
+    '.woff2' = 'font/woff2'
     '.jpg'  = 'image/jpeg'
     '.ico'  = 'image/x-icon'
     '.md'   = 'text/plain; charset=utf-8'
