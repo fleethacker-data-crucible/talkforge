@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - 'v*'
+  # Re-attach assets to an existing tag without re-tagging. A re-run of a tag-push run
+  # uses the workflow file at the tagged commit; a dispatch from main uses this file.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag, e.g. v1.3.0'
+        required: true
 
 permissions:
   contents: write
@@ -12,68 +19,55 @@ jobs:
   release:
     name: Build and attach assets
     runs-on: ubuntu-26.04
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v5
-
-      - name: Stamp release base for zip/source downloads
+      - name: Validate tag
         run: |
-          mkdir -p assets
-          # Stamp the .0 series base so patch releases reuse the same large assets.
-          # e.g. v1.0.1 → https://github.com/owner/repo/releases/download/v1.0.0
-          TAG="${GITHUB_REF#refs/tags/}"
-          SERIES="${TAG%.*}.0"
-          echo "https://github.com/${{ github.repository }}/releases/download/${SERIES}" > assets/release-base.txt
-          echo "Stamped series base: $(cat assets/release-base.txt)"
-
-      - name: Commit stamp back to the repo
-        # Simple commit-back so the next "Code → Download ZIP" contains the correct base.
-        # Uses the default GITHUB_TOKEN (contents: write is already set above).
-        # Pushes with this token do not re-trigger workflows.
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/release-base.txt
-          # Only commit if the stamp actually changed
-          if git diff --cached --quiet; then
-            echo "No stamp change; skipping commit."
-          else
-            git commit -m "Stamp release-base.txt for ${GITHUB_REF#refs/tags/}"
-            # Tag checkouts are detached HEAD, so push explicitly to main.
-            git push origin HEAD:main
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag '$TAG' is not vX.Y.Z"; exit 1
           fi
+
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/tags/${{ env.TAG }}
+
+      # No commit back to main: main only takes changes through a pull request, and
+      # this workflow must never bypass that. The stamp ships as a release asset instead.
+      # When a new .0 series starts, update assets/release-base.txt with a normal PR.
 
       - name: Download models and WASM
         # Only fetch large assets when this is a .0 series release.
-        if: ${{ endsWith(github.ref, '.0') }}
+        if: ${{ endsWith(env.TAG, '.0') }}
         run: |
           chmod +x populate-assets.sh
           ./populate-assets.sh
 
       - name: Create release and upload assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Runs before the stamp, so a stamp problem can never block the large assets.
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
           NOTES="Models and large WASM live on the .0 series release and are reused by patch releases."
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --verify-tag --title "TalkForge $TAG" --notes "$NOTES"
+          fi
           if [[ "$TAG" == *.0 ]]; then
-            gh release create "$TAG" \
-              --title "TalkForge $TAG" \
-              --notes "$NOTES" \
-              --target main \
-              assets/release-base.txt \
+            gh release upload "$TAG" --clobber \
               assets/models/*.onnx \
               assets/wasm/piper_phonemize.data \
-              assets/vendor/onnx/*.wasm || \
-            gh release upload "$TAG" \
-              assets/release-base.txt \
-              assets/models/*.onnx \
-              assets/wasm/piper_phonemize.data \
-              assets/vendor/onnx/*.wasm --clobber
-          else
-            # Patch release: stamp only, no large assets.
-            gh release create "$TAG" \
-              --title "TalkForge $TAG" \
-              --notes "$NOTES" \
-              --target main \
-              assets/release-base.txt || true
+              assets/wasm/piper_phonemize.wasm \
+              assets/vendor/onnx/*.wasm
+          fi
+
+      - name: Attach release-base.txt stamp
+        # e.g. v1.0.1 -> https://github.com/owner/repo/releases/download/v1.0.0
+        run: |
+          SERIES="${TAG%.*}.0"
+          mkdir -p "$RUNNER_TEMP/stamp"
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/${SERIES}" > "$RUNNER_TEMP/stamp/release-base.txt"
+          echo "Stamped series base: $(cat "$RUNNER_TEMP/stamp/release-base.txt")"
+          gh release upload "$TAG" "$RUNNER_TEMP/stamp/release-base.txt" --clobber
+          COMMITTED="$(head -1 assets/release-base.txt 2>/dev/null | tr -d '[:space:]')"
+          if [[ "$COMMITTED" != "$(cat "$RUNNER_TEMP/stamp/release-base.txt")" ]]; then
+            echo "::notice::assets/release-base.txt in the repo says '$COMMITTED'. Open a PR to set it to the stamp above."
           fi
