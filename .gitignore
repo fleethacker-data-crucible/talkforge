@@ -1,0 +1,11 @@
+
+# FleetHacker standard additions
+Logs/
+logs/
+*.log
+testResults.xml
+temp/
+*.tmp
+Thumbs.db
+desktop.ini
+.vs/
