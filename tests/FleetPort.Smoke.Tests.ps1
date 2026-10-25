@@ -26,6 +26,8 @@ BeforeAll {
         $out = [IO.Path]::GetTempFileName(); $err = [IO.Path]::GetTempFileName()
         $p = Start-Process $hostExe -PassThru -NoNewWindow -RedirectStandardOutput $out -RedirectStandardError $err -ArgumentList @(
             '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ('"' + (Join-Path $Dir 'serve-windows.ps1') + '"'), '-Port', "$port", '-NoBrowser')
+        # Windows PowerShell 5.1: read .Handle now, or ExitCode reads as $null after exit (Start-Process -PassThru with -Redirect*).
+        [void]$p.Handle
         return @{ Process = $p; Out = $out; Err = $err; Script = (Join-Path $Dir 'serve-windows.ps1') }
     }
     function Wait-Id([int]$TimeoutMs = 15000) {
