@@ -2,7 +2,7 @@
 
 Turn text into natural speech entirely in the browser, offline, and download it as MP3 or WAV.
 
-> **Status: skeleton.** The screenshots below are placeholders. Zombie Admin captures them with demo data, and the Chief of Staff scans them for sensitive content before they are added (team directive 10). Until then the image links do not resolve.
+> **Screenshots:** captured with demo data and scanned by the Chief of Staff (team directive 10).
 
 ## Before you start
 
@@ -14,39 +14,39 @@ Turn text into natural speech entirely in the browser, offline, and download it 
 
 ### 1. First launch
 
-TalkForge opens with the text box, model and voice pickers and playback controls.
+TalkForge opens with the text box, the model and voice pickers and the playback controls. The page header currently reads *Piper TTS v2.2.2*, the name of the speech engine it is built on.
 
-![TalkForge page on first launch, with the text box, model and voice pickers and the playback controls.](../assets/walkthrough/01-first-launch.png)
+![TalkForge on first launch, headed Piper TTS v2.2.2, with the default sample text, the LibriTTS-R Medium model and its speaker list.](../assets/walkthrough/01-first-launch.png)
 
 ### 2. Add text and pick a voice
 
 Paste or drop text, then choose a model, voice and speed.
 
-![TalkForge with the demo paragraph pasted, the en_US-lessac-medium model and speed 1.0 selected.](../assets/walkthrough/02-text-and-voice.png)
+![TalkForge with a short demo sentence pasted, the Lessac Medium single-speaker model selected and speed 1.0.](../assets/walkthrough/02-text-and-voice.png)
 
 ### 3. Listen
 
-Select **Play**. Use **Pause**, **Stop**, **Prev** and **Next** to move through the text.
+Select **Play**. Use **Pause**, **Stop**, **Prev** and **Next** to move through the text. **Reading mode** chooses whether to read everything, the selection, or from where you click.
 
-![TalkForge reading the demo paragraph aloud, with the Pause, Stop, Prev and Next controls active.](../assets/walkthrough/03-playing.png)
+![TalkForge playback controls while reading, with Read all selected and the Pause, Stop, Prev and Next buttons available.](../assets/walkthrough/03-playing.png)
 
 ### 4. Choose a speaker
 
-Multi-speaker models have a searchable speaker list. Mark the ones you like as favourites.
+Multi-speaker models have a searchable speaker list. Speakers are named *Speaker N*, so search by number. Select **Favorite** to mark the ones you like.
 
-![TalkForge Voice and Speaker list for a multi-speaker model, filtered by a search, with one speaker marked as a favourite.](../assets/walkthrough/04-multi-speaker.png)
+![TalkForge speaker list for the LibriTTS-R Medium model filtered by the search 2, with Speaker 2 selected and marked Favorited.](../assets/walkthrough/04-multi-speaker.png)
 
 ### 5. Fix a pronunciation
 
 Add `word=say` lines under **Pronunciation overrides**.
 
-![TalkForge Pronunciation overrides box with one demo override in the word=say form.](../assets/walkthrough/05-pronunciation.png)
+![TalkForge Pronunciation overrides box with the demo override TalkForge=talk forge, below the playback and download buttons.](../assets/walkthrough/05-pronunciation.png)
 
 ### 6. Download
 
-Select **Download MP3** or **Download WAV** to save the audio.
+Select **Download MP3** or **Download WAV** to save the audio of your text.
 
-![TalkForge after synthesis, with the Download MP3 and Download WAV buttons available.](../assets/walkthrough/06-download.png)
+![TalkForge controls with the Download MP3 and Download WAV buttons and an empty Pronunciation overrides box showing its example text.](../assets/walkthrough/06-download.png)
 
 ## About these images
 
