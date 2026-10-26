@@ -1,4 +1,4 @@
-# Local Asset Manifest for Piper TTS Intranet Build
+# Local Asset Manifest for TalkForge-tts Intranet Build
 
 This directory holds all vendor libraries, WASM binaries, and voice models required for fully offline / intranet-only operation.
 
@@ -48,7 +48,7 @@ assets/
 
 ## Notes
 
-- All paths in the revised `piper-tts.html` are relative and point into this `assets/` tree.
+- All paths in the revised `TalkForge-tts.html` are relative and point into this `assets/` tree.
 - Place the files exactly as listed; the page will fail gracefully with a clear status message if a required asset is missing.
 - After the first successful load, models are also cached in the browser’s Origin Private File System by the library.
 - For production intranet, serve the entire `artifacts/` folder (or just the HTML + assets) from any static file server.

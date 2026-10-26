@@ -1,6 +1,6 @@
-# Piper TTS Local-Asset Playbook
+# TalkForge-tts Local-Asset Playbook
 
-Self-hosting guide for the client-side Piper TTS page so it runs entirely on an intranet with no external CDN or Hugging Face calls.
+Self-hosting guide for the client-side TalkForge-tts page so it runs entirely on an intranet with no external CDN or Hugging Face calls.
 
 ## Goal
 
@@ -9,7 +9,7 @@ Replace every external dependency with files served from the same origin (or an 
 ## Directory structure
 
 ```
-piper-tts.html
+TalkForge-tts.html
 assets/
 ├── MANIFEST.md
 ├── vendor/
@@ -69,7 +69,7 @@ Copy into `assets/models/`.
 
 ## Step 4 – Configure the page
 
-The revised `piper-tts.html` already defaults to relative paths:
+The revised `TalkForge-tts.html` already defaults to relative paths:
 
 ```js
 const ASSET_BASE = './assets';
@@ -88,16 +88,16 @@ If you need a different base path (e.g. `/static/tts/`), change the single `ASSE
 Any static file server works:
 
 ```bash
-# from the directory containing piper-tts.html and assets/
+# from the directory containing TalkForge-tts.html and assets/
 python3 -m http.server 8080
 # or nginx, Caddy, IIS, etc.
 ```
 
-Open `http://your-intranet-host/piper-tts.html`.
+Open `http://your-intranet-host/TalkForge-tts.html`.
 
 ## Verification checklist
 
-- [ ] `piper-tts.html` loads without console 404s for JS
+- [ ] `TalkForge-tts.html` loads without console 404s for JS
 - [ ] Model selector shows “LibriTTS-R Medium”
 - [ ] First Play triggers local model load (progress bar) and speech
 - [ ] Subsequent plays are instant (browser + OPFS cache)

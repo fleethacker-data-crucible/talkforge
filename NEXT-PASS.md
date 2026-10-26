@@ -2,7 +2,7 @@
 
 Findings from a review on 2026-10-24. Work top to bottom; tick items off as you go. Line numbers are as of commit `722b950` and may have shifted.
 
-The repo has no sanitize items: no personal data, internal docs or secrets were found. Tests pass offline (`node tests/tts-utils.test.mjs`, `node tests/syntax.test.mjs`), and `piper-tts.html` makes no CDN or external calls at runtime.
+The repo has no sanitize items: no personal data, internal docs or secrets were found. Tests pass offline (`node tests/tts-utils.test.mjs`, `node tests/syntax.test.mjs`), and `TalkForge-tts.html` makes no CDN or external calls at runtime.
 
 ## 1. A fresh clone can't run offline (TechStack: "bundle all deps")
 
@@ -23,14 +23,14 @@ The repo has no sanitize items: no personal data, internal docs or secrets were 
 
 ## 3. Bugs
 
-- [ ] **MEDIUM: "Download WAV" writes a malformed file.** `piper-tts.html:863` concatenates whole WAV blobs, each with its own RIFF header, so most players play only the first one. Merge the PCM data under a single header.
+- [ ] **MEDIUM: "Download WAV" writes a malformed file.** `TalkForge-tts.html:865` concatenates whole WAV blobs, each with its own RIFF header, so most players play only the first one. Merge the PCM data under a single header.
 - [ ] **MEDIUM: the release workflow fails when main has moved.** `.github/workflows/release.yml:42` runs `git push origin HEAD:main` from the detached tag checkout, which fails non-fast-forward once main is past the tag. The stamp commit also lands after the tag, so the tag's source zip carries the old `release-base.txt`.
 - [ ] **MEDIUM: populate-assets has a stale fallback and fails silently.** `populate-assets.sh:44,48` and `populate-assets.ps1:31,35` fall back to `v1.0.0` while `assets/release-base.txt` says v1.2.0. The ps1 worker prints `FAIL` (line 136) but exits 0, and the `.bat` just pauses.
 - [ ] **MEDIUM: PS 5.1 downloads can fail on TLS.** `populate-assets.ps1` never sets `[Net.ServicePointManager]::SecurityProtocol` to TLS 1.2, so `Invoke-WebRequest` fails on many Windows 10 / .NET 4.x setups. Also:
   - line 83 assigns to the automatic `$matches`
   - the regex depends on JSON key order
   - `Get-Asset` and `Get-AssetPreferRelease` (46-79) are never called
-- [ ] **LOW: the model can load twice at startup.** `populateVoices` and `preSynthesizeFirst` (`piper-tts.html:1005-1008`) can both call `ensureEngine` at once, loading the 75 MB+ model twice.
+- [ ] **LOW: the model can load twice at startup.** `populateVoices` and `preSynthesizeFirst` (`TalkForge-tts.html:1007-1010`) can both call `ensureEngine` at once, loading the 75 MB+ model twice.
 
 ## 4. Conformance and docs
 
@@ -45,4 +45,4 @@ The repo has no sanitize items: no personal data, internal docs or secrets were 
 
 - [ ] **Add a `.gitignore`.** There isn't one, so downloaded `.onnx`/`.data` files and `serve-windows.log` can be committed by accident.
 - [ ] **Remove unused files:** `assets/vendor/dist/voices_static-D_OtJDHM.js` (147 KB), `onnx/ort.wasm.min.mjs` and `onnx/ort-wasm-simd-threaded.mjs`. The manifest and `release.yml:66` also ship the unused non-jsep `ort-wasm-simd-threaded.wasm`.
-- [ ] **Remove unused code in `piper-tts.html`:** `checkLocalWasm` (421), `MULTI_SPEAKER_MODELS` (397) and `currentSession` (385).
+- [ ] **Remove unused code in `TalkForge-tts.html`:** `checkLocalWasm` (437), `MULTI_SPEAKER_MODELS` (411) and `currentSession` (399).

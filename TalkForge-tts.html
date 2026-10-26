@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Piper TTS - Client-Side Text to Speech</title>
+  <title>TalkForge-tts - Client-Side Text to Speech</title>
   <link rel="icon" href="assets/vendor/ui-kit/assets/favicon-32.png">
   <!-- FleetHacker UI kit v0.2.2. It is wrapped in @layer kit, so the page styles below still win. -->
   <link rel="stylesheet" href="assets/vendor/ui-kit/kit.css">
@@ -174,7 +174,7 @@
 <body>
   <a class="skip" href="#text">Skip to text</a>
   <header>
-    <h1>Piper TTS <span style="font-size:0.7rem;color:var(--muted);font-weight:400;">v2.2.2</span></h1>
+    <h1>TalkForge-tts <span id="pageVersion" style="font-size:0.7rem;color:var(--muted);font-weight:400;"></span></h1>
     <div class="subtitle">Client-side neural text-to-speech · LibriTTS Medium by default · Fully offline after first load</div>
     <div id="sourceBadge" style="margin-top:0.4rem;font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:6px;display:inline-block;background:var(--sel);color:var(--text);">Loading source…</div>
   </header>
@@ -283,6 +283,8 @@
   <script type="module">
     // ========== DEBUG PANEL ==========
     const PAGE_VERSION = '2.2.2';
+    // The header version comes from PAGE_VERSION, so there is one place to bump it.
+    document.getElementById('pageVersion').textContent = `v${PAGE_VERSION}`;
 
     const debugPanel = document.getElementById('debugPanel');
     const debugToggle = document.getElementById('debugToggle');

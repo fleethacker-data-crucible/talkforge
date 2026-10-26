@@ -5,7 +5,7 @@ BeforeAll {
     $script:hostExe = (Get-Process -Id $PID).Path
     $script:port = 18500
     Import-Module (Join-Path $repo 'FleetPort.psm1') -Force
-    $html = [IO.File]::ReadAllText((Join-Path $repo 'piper-tts.html'))
+    $html = [IO.File]::ReadAllText((Join-Path $repo 'TalkForge-tts.html'))
     $script:version = [regex]::Match($html, "PAGE_VERSION\s*=\s*'([0-9.]+)'").Groups[1].Value
 
     # A throwaway copy of the server; -Version writes a stub page with that PAGE_VERSION (the "older TalkForge").
@@ -19,7 +19,7 @@ BeforeAll {
             $f = Join-Path $dir 'serve-windows.ps1'
             [IO.File]::WriteAllText($f, ([IO.File]::ReadAllText($f) -replace '(?m)^\$listener\.Prefixes\.Add\(\$prefix\)\r?\n', ''))
         }
-        Set-Content -LiteralPath (Join-Path $dir 'piper-tts.html') -Value ("<!doctype html><title>smoke</title><script>const PAGE_VERSION = '" + $Version + "';</script>") -Encoding Ascii
+        Set-Content -LiteralPath (Join-Path $dir 'TalkForge-tts.html') -Value ("<!doctype html><title>smoke</title><script>const PAGE_VERSION = '" + $Version + "';</script>") -Encoding Ascii
         return $dir
     }
     function Start-TalkForge([string]$Dir) {
@@ -67,7 +67,7 @@ Describe 'serve-windows.ps1 port and self-detection' {
             $id.Version | Should -Be $version
             $id.Pid | Should -Be $s.Process.Id
             $id.Path | Should -Be ([IO.Path]::GetFullPath($s.Script))
-            (Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:$port/piper-tts.html" -TimeoutSec 5).StatusCode | Should -Be 200
+            (Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:$port/TalkForge-tts.html" -TimeoutSec 5).StatusCode | Should -Be 200
         } finally { Stop-TalkForge $s }
     }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# serve.sh — start a local static server for debugging the Piper TTS page
+# serve.sh — start a local static server for debugging the TalkForge-tts page
 #
 # Usage:
 #   chmod +x serve.sh
@@ -40,7 +40,7 @@ if [ "$PORT" != "$START_PORT" ]; then
 fi
 
 echo "Serving ${DIR} at http://127.0.0.1:${PORT}/"
-echo "Open: http://127.0.0.1:${PORT}/piper-tts.html"
+echo "Open: http://127.0.0.1:${PORT}/TalkForge-tts.html"
 echo "Press Ctrl+C to stop."
 
 if command -v python3 >/dev/null 2>&1; then

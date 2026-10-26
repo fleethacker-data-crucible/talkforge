@@ -1,5 +1,5 @@
 @echo off
-REM serve.bat — Windows entry point for the Piper TTS static server
+REM serve.bat — Windows entry point for the TalkForge-tts static server
 REM Double-click or run from a command prompt. Requires PowerShell 5.1+.
 
 setlocal
