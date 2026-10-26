@@ -1,4 +1,4 @@
-// tts-utils.js — pure functions for Piper TTS page (testable under Node)
+// tts-utils.js — pure functions for the TalkForge-tts page (testable under Node)
 
 // Collapse consecutive whitespace and newlines so blank lines don't become long pauses.
 export function normalizeWhitespace(text) {

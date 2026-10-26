@@ -23,10 +23,10 @@ function checkJs(label, source) {
 }
 
 // Inline module script in the page
-const html = readFileSync(join(root, 'piper-tts.html'), 'utf8');
+const html = readFileSync(join(root, 'TalkForge-tts.html'), 'utf8');
 const m = html.match(/<script type="module">([\s\S]*?)<\/script>/);
-assert.ok(m, 'piper-tts.html has a module script');
-checkJs('piper-tts.html inline script', m[1]);
+assert.ok(m, 'TalkForge-tts.html has a module script');
+checkJs('TalkForge-tts.html inline script', m[1]);
 
 // Vendor modules
 for (const rel of [

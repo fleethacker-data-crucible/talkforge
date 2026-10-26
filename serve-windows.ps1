@@ -1,4 +1,4 @@
-﻿# serve-windows.ps1 — static file server for Piper TTS (PowerShell 5.1, no admin, localhost only)
+﻿# serve-windows.ps1 — static file server for the TalkForge-tts page (PowerShell 5.1, no admin, localhost only)
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File .\serve-windows.ps1
 #   powershell -ExecutionPolicy Bypass -File .\serve-windows.ps1 -Port 25005   (exact port; default is the 25000-25009 block)
@@ -24,7 +24,7 @@ function Show-Fatal([string]$text) {
     Write-Log "[FATAL] $text"
     try {
         Add-Type -AssemblyName System.Windows.Forms
-        [void][System.Windows.Forms.MessageBox]::Show("Piper TTS server could not start.`n`n$text`n`nLog: $logFile", 'Piper TTS Server',
+        [void][System.Windows.Forms.MessageBox]::Show("TalkForge-tts server could not start.`n`n$text`n`nLog: $logFile", 'TalkForge-tts Server',
             [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
     } catch {}
     exit 1
@@ -54,14 +54,14 @@ $mime = @{
 # Port block 25000-25009, policy reuse (edge-ops PORTS.md). An explicit -Port is used exactly.
 Import-Module (Join-Path $PSScriptRoot 'FleetPort.psm1') -Force
 $version = '0.0.0'
-$page = Join-Path $PSScriptRoot 'piper-tts.html'
+$page = Join-Path $PSScriptRoot 'TalkForge-tts.html'
 if ((Test-Path -LiteralPath $page) -and ([IO.File]::ReadAllText($page) -match "PAGE_VERSION\s*=\s*'([0-9.]+)'")) { $version = $Matches[1] }
 $selfPath = [IO.Path]::GetFullPath($PSCommandPath)
 $fleetArgs = @{ Tool = 'talkforge'; Version = $version; RegistryPath = (Join-Path $PSScriptRoot 'FleetPorts.psd1'); NoListener = $true }
 if ($PSBoundParameters.ContainsKey('Port')) { $fleetArgs.Start = $Port; $fleetArgs.Size = 1 }
 try { $slot = Resolve-FleetPort @fleetArgs } catch { Show-Fatal $_.Exception.Message }
 if ($slot.Action -eq 'Reuse') {
-    $page = "http://127.0.0.1:$($slot.Port)/piper-tts.html"
+    $page = "http://127.0.0.1:$($slot.Port)/TalkForge-tts.html"
     if ($slot.Note) { Write-Log $slot.Note }
     Write-Log "TalkForge $($slot.Existing.Version) is already running: $page"
     if (-not $NoBrowser) { try { Start-Process $page } catch {} }
@@ -80,11 +80,11 @@ try { $listener.Start() }
 catch { Show-Fatal "Failed to start listener on $prefix : $_" }
 
 Write-Log "Serving $Root at $prefix"
-Write-Log "Open: ${prefix}piper-tts.html"
+Write-Log "Open: ${prefix}TalkForge-tts.html"
 Write-Log "Press Ctrl+C to stop."
 
 if (-not $NoBrowser) {
-    try { Start-Process "${prefix}piper-tts.html" } catch {}
+    try { Start-Process "${prefix}TalkForge-tts.html" } catch {}
 }
 
 function Send-File($res, $path, $req) {
@@ -142,7 +142,7 @@ try {
                 continue
             }
             $rel = [System.Uri]::UnescapeDataString($req.Url.LocalPath).TrimStart('/')
-            if ([string]::IsNullOrEmpty($rel)) { $rel = 'piper-tts.html' }
+            if ([string]::IsNullOrEmpty($rel)) { $rel = 'TalkForge-tts.html' }
             $full = [IO.Path]::GetFullPath((Join-Path $Root $rel))
             # Prevent path traversal
             if (-not $full.StartsWith($Root, [StringComparison]::OrdinalIgnoreCase)) {
