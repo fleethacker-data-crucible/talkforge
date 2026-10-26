@@ -14,7 +14,7 @@ Turn text into natural speech entirely in the browser, offline, and download it 
 
 ### 1. First launch
 
-TalkForge opens with the text box, the model and voice pickers and the playback controls. The page header reads *TalkForge-tts* and the page version (v2.2.2 at the time of writing). The speech engine underneath is Piper TTS, credited in the page footer.
+TalkForge opens with the text box, the model and voice pickers and the playback controls. The page header reads *TalkForge-tts* and the page version (v2.2.3 at the time of writing). The speech engine underneath is Piper TTS, credited in the page footer.
 
 ![TalkForge on first launch, headed with the page name and version, with the default sample text, the LibriTTS-R Medium model and its speaker list.](../assets/walkthrough/01-first-launch.png)
 
