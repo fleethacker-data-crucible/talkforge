@@ -1,5 +1,10 @@
 # Pester 5 smoke tests for the port block + self-detection in Start-TalkForge.ps1.
 # Run: Invoke-Pester -Path .\tests -Output Detailed   (Windows PowerShell 5.1; uses scratch port 18500, starts real servers).
+BeforeDiscovery {
+    $script:IsElevated = $false
+    if ($IsWindows -ne $false) { $script:IsElevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) }
+}
+
 BeforeAll {
     $script:repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
     $script:hostExe = (Get-Process -Id $PID).Path
@@ -67,6 +72,18 @@ Describe 'Start-TalkForge.ps1 port and self-detection' {
             $id.Version | Should -Be $version
             $id.Pid | Should -Be $s.Process.Id
             $id.Path | Should -Be ([IO.Path]::GetFullPath($s.Script))
+            (Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:$port/TalkForge-tts.html" -TimeoutSec 5).StatusCode | Should -Be 200
+        } finally { Stop-TalkForge $s }
+    }
+
+    It 'serves as a standard user: it does not need administrator rights' -Skip:$script:IsElevated {
+        # HttpListener on the 127.0.0.1 and localhost prefixes needs no URL ACL. This runs only when the test
+        # session itself is not elevated, so a pass is real evidence; in an elevated session it is skipped.
+        $s = Start-TalkForge $current
+        try {
+            (Wait-Id) | Should -Not -BeNullOrEmpty
+            ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) | Should -BeFalse
+            (Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$port/TalkForge-tts.html" -TimeoutSec 5).StatusCode | Should -Be 200
             (Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:$port/TalkForge-tts.html" -TimeoutSec 5).StatusCode | Should -Be 200
         } finally { Stop-TalkForge $s }
     }

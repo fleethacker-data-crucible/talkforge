@@ -30,6 +30,10 @@ TalkForge.bat                # starts the local server and opens the page (serve
 
 Open `TalkForge-tts.html` in a browser. The page loads everything from the local `assets/` folder and makes no CDN or other external requests. If a model or WASM file is missing it stops with an error instead of fetching it from the internet; run `populate-assets` to download the files from the pinned GitHub Release.
 
+### Supported install
+
+The supported install is: the repo plus the release assets, fetched once by `populate-assets` (verified against SHA-256). Run it on a build or internet-connected machine, then copy the whole folder to the workstation; a workstation never needs to download anything at run time. `-Only` / `TALKFORGE_ONLY` fetches just the voices you want. See LOCAL-ASSET-PLAYBOOK.md.
+
 ## What’s in the repo vs. a Release
 
 | In the repo (cloned) | In a GitHub Release (`.0` series only) |
@@ -152,6 +156,10 @@ TALKFORGE_TOKEN=<16+ chars> talkforge serve                    # endpoint on 127
 ```
 
 `speak` options: `--out <file|->`, `--voice` (default en_US-lessac-high), `--speed` (1 = normal), `--speaker`, `--format wav|mp3`, `--assets <dir>`. Exit codes: 0 ok, 1 error, 2 assets missing, 64 bad usage.
+
+**Machine-readable output.** `talkforge version --json` prints `{"schema": "talkforge.version/1", "version", "node"}`; `talkforge speak ... --out <file> --json` prints one line `{"schema": "talkforge.speak/1", "out", "format", "voice", "seconds", "sampleRate", "bytes"}` on stdout (the audio goes to the file; `--json` without `--out` is a usage error); `voices list --json` is below. Errors stay on stderr with the exit codes above.
+
+**Preflight.** `talkforge assets status [--voice <id>] [--json] [--no-hash]` checks that the files a voice needs are present and match the manifest SHA-256, and prints the `populate-assets` command for anything missing; exit 0 ready, 2 not ready, 64 unknown voice. It never downloads. The step-by-step for getting the voice files onto a rendering machine is in docs/VOICE-CONTRACT.md.
 
 **Voices.** `talkforge voices list [--json] [--installed]` shows every voice the local assets know about (catalogue `assets/models.json` plus the `models/*.onnx.json` configs): id, installed or missing (the `.onnx` model file), speaker count, sample rate, language, and a `*` on the default. `--json` prints `{"schema": "talkforge.voices/1", "default", "assets", "voices": [...]}`. `speak --voice <id>` and `--speaker <n>` are checked against that list first: an unknown voice or a speaker out of range exits 64 and names the valid ones; a known voice whose model is not downloaded exits 2 (assets missing). The endpoint has the same list at `GET /v1/voices` (token required).
 

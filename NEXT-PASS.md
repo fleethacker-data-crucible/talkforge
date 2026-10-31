@@ -6,18 +6,18 @@ The repo has no sanitize items: no personal data, internal docs or secrets were 
 
 ## 1. A fresh clone can't run offline (TechStack: "bundle all deps")
 
-- [ ] **HIGH: runtime assets aren't in the repo.** They are listed in `assets-manifest.json:3-112` but missing:
+- [x] **HIGH: runtime assets aren't in the repo.** They are listed in `assets-manifest.json:3-112` but missing: Resolved by documenting the supported install: release assets via `populate-assets` (README "Supported install"). `talkforge assets status` is the preflight that checks them.
   - all 9 `models/*.onnx`
   - `wasm/piper_phonemize.data` (about 18 MB)
   - `vendor/onnx/ort-wasm-simd-threaded.jsep.wasm`, which `ort.min.mjs` requests
 
   Either commit them (LFS or a release zip built off-workstation) or document that the release zip is the only supported install.
-- [ ] **HIGH: the workstation downloads assets.** (CDN and Hugging Face fallbacks are now opt-in only: -AllowUpstream / TALKFORGE_ALLOW_UPSTREAM=1.) `populate-assets.ps1:56,119` and `populate-assets.sh:71-73` pull from GitHub Releases, falling back to cdn.jsdelivr.net and huggingface.co. `README.md:19` tells Windows users to run it on the workstation. Make it a build-machine step only.
+- [x] **HIGH: the workstation downloads assets.** (CDN and Hugging Face fallbacks are now opt-in only: -AllowUpstream / TALKFORGE_ALLOW_UPSTREAM=1.) `populate-assets.ps1:56,119` and `populate-assets.sh:71-73` pull from GitHub Releases, falling back to cdn.jsdelivr.net and huggingface.co. `README.md:19` tells Windows users to run it on the workstation. Make it a build-machine step only. Now a build-machine step: README "Supported install" and the playbook say to populate once and copy the folder.
 - [x] **HIGH: downloads aren't integrity-checked.** `assets-manifest.json` has no sha256 or sizes, and the "already exists → skip" logic (ps1:48/68/96, sh:65/85) keeps truncated or tampered files forever. Add hashes, verify them after download, and re-fetch on mismatch. Fixed: sha256 for every manifest entry, verified on download and on existing files.
 
 ## 2. Windows server (`serve-windows.ps1`)
 
-- [ ] **HIGH (confirm on a non-admin account): `HttpListener` may need admin.** `serve-windows.ps1:70-74` uses it with `http://127.0.0.1:$port/`, and HTTP.sys usually refuses that prefix for non-admin users without a URL ACL. TechStack line 10 calls for `TcpListener`, which line 55 already uses for the port probe. Switch the server to it.
+- [x] **HIGH (confirm on a non-admin account): `HttpListener` may need admin.** `serve-windows.ps1:70-74` uses it with `http://127.0.0.1:$port/`, and HTTP.sys usually refuses that prefix for non-admin users without a URL ACL. TechStack line 10 calls for `TcpListener`, which line 55 already uses for the port probe. Switch the server to it. Confirmed not needed: on 2026-10-31 a non-admin Windows 11 session ran `Start-TalkForge.ps1` (127.0.0.1 and localhost prefixes) and served the page, with the `/__fleethacker/*` endpoints, with no URL ACL. TcpListener not required.
 - [x] **MEDIUM: the path-traversal guard can be bypassed.** Fixed: the root check uses a trailing separator, the path is decoded once, and `.git`, `.env*`, `*.log` and `:` (alternate streams, drive letters) are refused (Pester tests).
 - [~] **MEDIUM: assets are refetched for every sentence.** Line 88 sends `Cache-Control: no-store`, and `assets/vendor/piper-engine.js:45` builds a new phonemizer per sentence. Together they re-fetch about 18 MB `.data` + `.wasm` for each chunk and leak instances. Cache the phonemizer, and allow caching of static assets. Partly done: models, `.wasm` and `.data` now send `private, max-age=300`; the page, scripts and configs stay `no-store`. Still open: `piper-engine.js` builds a new phonemizer per sentence.
 

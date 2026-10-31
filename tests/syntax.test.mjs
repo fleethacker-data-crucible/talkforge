@@ -1,5 +1,5 @@
 // tests/syntax.test.mjs — catch parse errors before they hang the page
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -22,18 +22,21 @@ function checkJs(label, source) {
   }
 }
 
-// Inline module script in the page
+// Every inline <script> in the page (module or classic; external src scripts and data blocks are skipped)
 const html = readFileSync(join(root, 'TalkForge-tts.html'), 'utf8');
-const m = html.match(/<script type="module">([\s\S]*?)<\/script>/);
-assert.ok(m, 'TalkForge-tts.html has a module script');
-checkJs('TalkForge-tts.html inline script', m[1]);
-
-// Vendor modules
-for (const rel of [
-  'assets/vendor/tts-utils.js',
-  'assets/vendor/piper-engine.js'
-]) {
-  checkJs(rel, readFileSync(join(root, rel), 'utf8'));
+let inline = 0;
+for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)) {
+  if (/\bsrc\s*=/.test(m[1]) || /type\s*=\s*["'](?!module|text\/javascript)/.test(m[1]) || !m[2].trim()) continue;
+  inline++;
+  checkJs(`TalkForge-tts.html inline script #${inline}`, m[2]);
 }
+assert.ok(inline >= 1, 'TalkForge-tts.html has an inline script');
+
+// Our own modules: vendor helpers and engine, the Node tools, and the tests themselves
+const files = ['assets/vendor/tts-utils.js', 'assets/vendor/piper-engine.js'];
+for (const dir of ['tools', 'tests']) {
+  for (const f of readdirSync(join(root, dir)).sort()) if (/\.mjs$/.test(f)) files.push(`${dir}/${f}`);
+}
+for (const rel of files) checkJs(rel, readFileSync(join(root, rel), 'utf8'));
 
 if (!process.exitCode) console.log('Syntax checks passed.');

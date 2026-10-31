@@ -66,7 +66,7 @@ await test('parseArgs: voices list, flags, and misuse', () => {
   assert.deepEqual([o.cmd, o.json, o.installed, o.assets], ['voices', true, true, 'x']);
   assert.throws(() => parseArgs(['voices']), /voices list/);
   assert.throws(() => parseArgs(['voices', 'add']), /voices list/);
-  assert.throws(() => parseArgs(['speak', 'hi', '--json']), /voices list/);
+  assert.throws(() => parseArgs(['serve', '--json']), /--json is for/);
 });
 
 await test('CLI: voices list --json is stable and machine readable', () => {
