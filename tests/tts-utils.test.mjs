@@ -1,5 +1,5 @@
 // tests/tts-utils.test.mjs — pure-function tests (Node, no browser)
-import { splitSentences, pcmToWavArrayBuffer, filterSpeakers, parseModelsJson } from '../assets/vendor/tts-utils.js';
+import { splitSentences, pcmToWavArrayBuffer, filterSpeakers, parseModelsJson, speedToLengthScale, parseWav, concatWavBuffers } from '../assets/vendor/tts-utils.js';
 import assert from 'node:assert/strict';
 
 function test(name, fn) {
@@ -87,6 +87,49 @@ test('parseModelsJson', () => {
 test('parseModelsJson empty', () => {
   assert.deepEqual(parseModelsJson({}), []);
   assert.deepEqual(parseModelsJson(null), []);
+});
+
+
+test('speedToLengthScale is the reciprocal of speed (applied once)', () => {
+  assert.equal(speedToLengthScale(1), 1);
+  assert.equal(speedToLengthScale(2), 0.5);
+  assert.equal(speedToLengthScale(0.5), 2);
+  assert.equal(speedToLengthScale('1.25'), 0.8);
+  assert.equal(speedToLengthScale(0), 1);
+  assert.equal(speedToLengthScale(NaN), 1);
+  assert.equal(speedToLengthScale(100), 0.25);
+});
+
+test('concatWavBuffers writes one valid header and the concatenated PCM', () => {
+  const a = pcmToWavArrayBuffer(new Float32Array([0.1, 0.2, 0.3]), 22050);
+  const b = pcmToWavArrayBuffer(new Float32Array([-0.1, -0.2]), 22050);
+  const out = concatWavBuffers([a, b]);
+  const u8 = new Uint8Array(out);
+  assert.equal(out.byteLength, 44 + 5 * 2);
+  const tag = (o) => String.fromCharCode(...u8.subarray(o, o + 4));
+  assert.equal(tag(0), 'RIFF');
+  assert.equal(tag(8), 'WAVE');
+  assert.equal(new DataView(out).getUint32(4, true), out.byteLength - 8);
+  assert.equal(new DataView(out).getUint32(40, true), 10);
+  // exactly one RIFF and one data tag
+  const text = Buffer.from(u8).toString('latin1');
+  assert.equal(text.split('RIFF').length - 1, 1);
+  assert.equal(text.split('data').length - 1, 1);
+  const parsed = parseWav(out);
+  assert.equal(parsed.sampleRate, 22050);
+  assert.deepEqual(
+    [...new Int16Array(parsed.pcm.buffer.slice(parsed.pcm.byteOffset, parsed.pcm.byteOffset + parsed.pcm.length))],
+    [...new Int16Array(parseWav(a).pcm.slice().buffer), ...new Int16Array(parseWav(b).pcm.slice().buffer)]
+  );
+});
+
+test('concatWavBuffers inserts silence gaps and rejects mixed formats', () => {
+  const a = pcmToWavArrayBuffer(new Float32Array([0.5]), 1000);
+  const out = concatWavBuffers([a, a], 0.01); // 10 samples of gap
+  assert.equal(out.byteLength, 44 + (1 + 10 + 1) * 2);
+  assert.throws(() => concatWavBuffers([a, pcmToWavArrayBuffer(new Float32Array([0.5]), 2000)]), /different formats/);
+  assert.throws(() => concatWavBuffers([]), /No audio/);
+  assert.throws(() => parseWav(new ArrayBuffer(8)), /RIFF/);
 });
 
 if (!process.exitCode) console.log('All tests passed.');
