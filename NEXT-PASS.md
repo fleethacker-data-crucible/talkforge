@@ -30,7 +30,7 @@ The repo has no sanitize items: no personal data, internal docs or secrets were 
   - line 83 assigns to the automatic `$matches`
   - the regex depends on JSON key order
   - `Get-Asset` and `Get-AssetPreferRelease` (46-79) are never called
-- [ ] **LOW: the model can load twice at startup.** `populateVoices` and `preSynthesizeFirst` (`TalkForge-tts.html:1007-1010`) can both call `ensureEngine` at once, loading the 75 MB+ model twice.
+- [x] **LOW: the model can load twice at startup.** `populateVoices` and `preSynthesizeFirst` (`TalkForge-tts.html:1007-1010`) can both call `ensureEngine` at once, loading the 75 MB+ model twice. Fixed: one in-flight load per model (`loadOnce`, unit-tested).
 
 ## 4. Conformance and docs
 
@@ -45,4 +45,4 @@ The repo has no sanitize items: no personal data, internal docs or secrets were 
 
 - [ ] **Add a `.gitignore`.** There isn't one, so downloaded `.onnx`/`.data` files and `serve-windows.log` can be committed by accident.
 - [ ] **Remove unused files** (`voices_static` is already gone): `onnx/ort.wasm.min.mjs` and `onnx/ort-wasm-simd-threaded.mjs`. The manifest and `release.yml:66` also ship the unused non-jsep `ort-wasm-simd-threaded.wasm`.
-- [ ] **Remove unused code in `TalkForge-tts.html`:** `checkLocalWasm` (437), `MULTI_SPEAKER_MODELS` (411) and `currentSession` (399).
+- [x] **Remove unused code in `TalkForge-tts.html`:** `checkLocalWasm` (437), `MULTI_SPEAKER_MODELS` (411) and `currentSession` (399). Removed.
