@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 # populate-assets.sh
-# Downloads assets listed in assets-manifest.json.
-# Prefers the GitHub Release for entries with preferRelease=true.
+# Downloads assets listed in assets-manifest.json and verifies each SHA-256.
+# Prefers the GitHub Release for entries with preferRelease=true, then the upstream url.
+# A file that does not match its sha256 is never kept; exit code is 1 if anything failed.
 #
 # Usage:
 #   chmod +x populate-assets.sh
 #   ./populate-assets.sh
+#   TALKFORGE_ONLY="models/en_US-lessac-high*,wasm/*,vendor/onnx/*.jsep.wasm" ./populate-assets.sh
+#
+# TALKFORGE_ONLY: comma-separated wildcard patterns matched against the manifest "dest".
+# Hash rule: .json files are hashed with CR bytes removed (checkouts may be CRLF).
 
 set -euo pipefail
 
@@ -57,67 +62,124 @@ RELEASE_BASE="$(to_series_base "$(detect_release_base)")"
 echo "Using release base: ${RELEASE_BASE}"
 echo "Reading manifest: ${MANIFEST}"
 
-download() {
-  local url="$1"
-  local dest="$2"
-  local name
-  name=$(basename "${dest}")
-  if [[ -f "${dest}" ]]; then
-    echo "  [skip] ${name} already exists"
-    return 0
-  fi
-  echo "  [get]  ${name} <- ${url}"
+PY="$(command -v python3 || command -v python || true)"
+if [[ -z "${PY}" ]]; then
+  echo "Error: python3 (or python) is required to read the manifest." >&2
+  exit 1
+fi
+
+# sha256 of a file; .json files are hashed with CR bytes removed.
+sha256_of() {
+  "${PY}" - "$1" "$2" << 'PYH' | tr -d '[:space:]'
+import hashlib, sys
+path, dest = sys.argv[1], sys.argv[2]
+data = open(path, "rb").read()
+if dest.endswith(".json"):
+    data = data.replace(bytes([13]), b"")
+print(hashlib.sha256(data).hexdigest())
+PYH
+}
+
+fetch() {
+  local url="$1" out="$2"
   if command -v curl >/dev/null 2>&1; then
-    curl -fL --retry 3 --retry-delay 2 -o "${dest}" "${url}"
+    curl -fsSL --retry 3 --retry-delay 2 -o "${out}" "${url}"
   elif command -v wget >/dev/null 2>&1; then
-    wget -q --tries=3 -O "${dest}" "${url}"
+    wget -q --tries=3 -O "${out}" "${url}"
   else
     echo "Error: neither curl nor wget is available." >&2
     exit 1
   fi
 }
 
-download_prefer_release() {
-  local filename="$1"
-  local fallback_url="$2"
-  local dest="$3"
-  local release_url="${RELEASE_BASE}/${filename}"
-  if [[ -f "${dest}" ]]; then
-    echo "  [skip] $(basename "${dest}") already exists"
-    return 0
+FAILURES=()
+
+# $1 dest (relative)  $2 upstream url  $3 prefer release (1/0)  $4 expected sha256
+process() {
+  local dest="$1" url="$2" prefer="$3" expected="$4"
+  local full_dest="${ASSET_ROOT}/${dest}" name
+  name="$(basename "${dest}")"
+  if ! [[ "${expected}" =~ ^[0-9a-f]{64}$ ]]; then
+    FAILURES+=("${name} : manifest entry has no valid sha256 (refusing to use unverified files)")
+    return
   fi
-  echo "  [try]  $(basename "${dest}") from release: ${release_url}"
-  if download "${release_url}" "${dest}" 2>/dev/null; then
-    echo "  [got]  $(basename "${dest}") <- ${release_url}"
-    return 0
+  mkdir -p "$(dirname "${full_dest}")"
+  if [[ -f "${full_dest}" ]]; then
+    local actual
+    actual="$(sha256_of "${full_dest}" "${dest}")"
+    if [[ "${actual}" == "${expected}" ]]; then
+      echo "  [ok]   ${name} already present, SHA-256 verified"
+    else
+      FAILURES+=("${name} : file exists but SHA-256 does not match (expected ${expected}, got ${actual}). Delete ${full_dest} and run again.")
+    fi
+    return
   fi
-  echo "  [fallback] $(basename "${dest}") <- ${fallback_url}"
-  download "${fallback_url}" "${dest}"
-  echo "  [got]  $(basename "${dest}") <- ${fallback_url}"
+  local urls=()
+  if [[ "${prefer}" == "1" ]]; then urls+=("${RELEASE_BASE}/${name}"); fi
+  urls+=("${url}")
+  local part="${full_dest}.part" problems="" u actual
+  for u in "${urls[@]}"; do
+    echo "  [get]  ${name} <- ${u}"
+    if ! (fetch "${u}" "${part}") 2>/dev/null; then
+      problems+="download failed from ${u}; "
+      rm -f "${part}"
+      continue
+    fi
+    actual="$(sha256_of "${part}" "${dest}")"
+    if [[ "${actual}" == "${expected}" ]]; then
+      mv -f "${part}" "${full_dest}"
+      echo "  [ok]   ${name} verified <- ${u}"
+      return
+    fi
+    problems+="SHA-256 MISMATCH from ${u} (expected ${expected}, got ${actual}); "
+    rm -f "${part}"
+  done
+  FAILURES+=("${name} : ${problems}")
 }
 
-# Parse manifest with python3 (available on the CI runner and most dev machines)
-python3 - "${MANIFEST}" << 'PY' | while IFS=$'\t' read -r dest url prefer; do
+matches_only() {
+  local dest="$1" pat
+  [[ -z "${TALKFORGE_ONLY:-}" ]] && return 0
+  IFS=',' read -ra pats <<< "${TALKFORGE_ONLY}"
+  for pat in "${pats[@]}"; do
+    # shellcheck disable=SC2053
+    [[ "${dest}" == ${pat} ]] && return 0
+  done
+  return 1
+}
+
+MATCHED=0
+CR="$(printf "%b" "\r")"
+while IFS=$'	' read -r dest url prefer sha; do
+  sha="${sha%$CR}"  # python on Windows prints CRLF
+  if matches_only "${dest}"; then
+    MATCHED=$((MATCHED + 1))
+    process "${dest}" "${url}" "${prefer}" "${sha}"
+  fi
+done < <("${PY}" - "${MANIFEST}" << 'PYM'
 import json, sys
-with open(sys.argv[1]) as f:
+with open(sys.argv[1], encoding="utf-8-sig") as f:
     data = json.load(f)
 for a in data.get("assets", []):
     dest = a.get("dest", "")
     url = a.get("url", "")
     prefer = "1" if a.get("preferRelease") else "0"
+    sha = (a.get("sha256") or "").lower()
     if dest and url:
-        print(f"{dest}\t{url}\t{prefer}")
-PY
-  full_dest="${ASSET_ROOT}/${dest}"
-  mkdir -p "$(dirname "${full_dest}")"
-  filename=$(basename "${dest}")
-  if [[ "${prefer}" == "1" ]]; then
-    download_prefer_release "${filename}" "${url}" "${full_dest}"
-  else
-    download "${url}" "${full_dest}"
-  fi
-done
+        print(f"{dest}	{url}	{prefer}	{sha}")
+PYM
+)
+
+if [[ -n "${TALKFORGE_ONLY:-}" && "${MATCHED}" -eq 0 ]]; then
+  FAILURES+=("TALKFORGE_ONLY matched no manifest entry: ${TALKFORGE_ONLY}")
+fi
 
 echo ""
-echo "Done."
+if [[ ${#FAILURES[@]} -gt 0 ]]; then
+  echo "FAILED: ${#FAILURES[@]} asset(s) could not be verified:" >&2
+  for f in "${FAILURES[@]}"; do echo "  - ${f}" >&2; done
+  echo "No unverified file was kept. Fix the problem above and run this script again." >&2
+  exit 1
+fi
+echo "Done. All assets verified (SHA-256)."
 echo "Assets under: ${ASSET_ROOT}"

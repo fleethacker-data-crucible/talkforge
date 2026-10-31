@@ -54,6 +54,12 @@ git push origin v1.1.1
 
 After the workflow finishes, `populate-assets.sh` / `.ps1` / `.bat` will pull the large files from the `.0` release of the repo the script is running in (or from the stamped `assets/release-base.txt`).
 
+### Integrity checks
+
+Every asset in `assets-manifest.json` has a `sha256`. `populate-assets` downloads to a `.part` file, verifies it, and only then moves it into place; a mismatch is reported (expected vs actual), the file is not kept, and the script exits with code 1. Files already present are verified too. `.json` configs are hashed with CR bytes removed so CRLF checkouts match. `-Only` (PowerShell) or `TALKFORGE_ONLY` (shell) limits the run to wildcard patterns, for example `models/en_US-lessac-high*,wasm/*,vendor/onnx/*.jsep.wasm`.
+
+If the page cannot find a file it needs, it lists exactly which `assets/...` files are missing and what to run.
+
 ## Features
 
 - Multi-speaker models (LibriTTS-R, VCTK) with searchable speaker list

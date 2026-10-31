@@ -1,6 +1,6 @@
 @echo off
 REM populate-assets.bat — Windows entry point for downloading TalkForge-tts assets
-REM Prefers the v1.0.0 GitHub Release; falls back to CDN / Hugging Face.
+REM Prefers the GitHub Release, falls back to the upstream URL; every file is SHA-256 verified.
 REM Double-click or run from a command prompt. Requires PowerShell 5.1+.
 REM
 REM Usage:
