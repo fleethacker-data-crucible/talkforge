@@ -69,7 +69,7 @@ If the page cannot find a file it needs, it lists exactly which `assets/...` fil
 - Speed control
 - Debug panel with copy-to-clipboard
 - Pure-function test suite (`node tests/tts-utils.test.mjs`)
-- Optional GitHub Actions tests (non-blocking)
+- GitHub Actions tests (unit + offline synthesis smoke test; failures block the PR check)
 
 ## Layout
 
