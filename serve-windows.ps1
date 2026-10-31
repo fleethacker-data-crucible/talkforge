@@ -20,6 +20,14 @@ function Write-Log([string]$msg) {
     try { [IO.File]::AppendAllText($logFile, $line + "`r`n") } catch {}
 }
 
+# True only when $Full is the root itself or lives inside it. Compares against the root WITH a
+# trailing separator, so a sibling such as C:\TalkForge-evil is not accepted for root C:\TalkForge.
+function Test-PathUnderRoot([string]$Root, [string]$Full) {
+    $trimRoot = $Root.TrimEnd('\', '/')
+    if ($Full.TrimEnd('\', '/').Equals($trimRoot, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+    return $Full.StartsWith($trimRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)
+}
+
 function Show-Fatal([string]$text) {
     Write-Log "[FATAL] $text"
     try {
@@ -145,7 +153,7 @@ try {
             if ([string]::IsNullOrEmpty($rel)) { $rel = 'TalkForge-tts.html' }
             $full = [IO.Path]::GetFullPath((Join-Path $Root $rel))
             # Prevent path traversal
-            if (-not $full.StartsWith($Root, [StringComparison]::OrdinalIgnoreCase)) {
+            if (-not (Test-PathUnderRoot $Root $full)) {
                 $res.StatusCode = 403
                 Write-Log "$($req.HttpMethod) /$rel -> 403"
             } elseif (Test-Path $full -PathType Leaf) {
