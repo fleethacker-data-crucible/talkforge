@@ -101,6 +101,46 @@ Describe 'launcher names and compatibility shims' {
     }
 }
 
+Describe 'Start-TalkForge.ps1 request path rules and caching' {
+    BeforeAll {
+        $path = Join-Path $script:RepoRootRun 'Start-TalkForge.ps1'
+        $tokens = $null; $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+        foreach ($name in 'Test-RequestPathAllowed', 'Get-CacheControlFor') {
+            $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
+            . ([scriptblock]::Create($fn.Extent.Text))
+        }
+    }
+    It 'allows normal asset and page paths' {
+        foreach ($p in '', 'TalkForge-tts.html', 'assets/models/en_US-lessac-high.onnx', 'assets\\vendor\\piper-engine.js', 'README.md') {
+            Test-RequestPathAllowed $p | Should -BeTrue -Because $p
+        }
+    }
+    It 'refuses git internals, env files and logs in any case or depth' {
+        foreach ($p in '.git/config', '.GIT/HEAD', 'assets/.git/x', '.env', '.env.local', 'sub/.ENV', 'serve-windows.log', 'TalkForge.log', 'logs/app.LOG') {
+            Test-RequestPathAllowed $p | Should -BeFalse -Because $p
+        }
+    }
+    It 'refuses NUL, drive letters and alternate data streams' {
+        foreach ($p in "a$([char]0)b", 'C:/Windows/win.ini', 'TalkForge-tts.html::$DATA', 'file.txt:stream') {
+            Test-RequestPathAllowed $p | Should -BeFalse -Because $p
+        }
+    }
+    It 'decodes the request path once: an encoded backslash stays a literal character' {
+        $uri = [uri]'http://127.0.0.1:25000/..%255Ctalkforge-other%255Cfile'
+        $uri.LocalPath.TrimStart('/') | Should -Be '..%5Ctalkforge-other%5Cfile'
+        $uri.LocalPath.Contains([string][char]92) | Should -BeFalse
+        $text = [IO.File]::ReadAllText((Join-Path $script:RepoRootRun 'Start-TalkForge.ps1'))
+        $text | Should -Not -Match 'UnescapeDataString\(\$req\.Url\.LocalPath'
+    }
+    It 'caches only immutable binaries, never the page or scripts' {
+        Get-CacheControlFor 'C:\x\assets\models\a.onnx' | Should -Be 'private, max-age=300'
+        Get-CacheControlFor 'C:\x\assets\wasm\piper_phonemize.DATA' | Should -Be 'private, max-age=300'
+        Get-CacheControlFor 'C:\x\a.wasm' | Should -Be 'private, max-age=300'
+        foreach ($f in 'TalkForge-tts.html', 'assets\\vendor\\piper-engine.js', 'a.json', 'b.mjs') { Get-CacheControlFor $f | Should -Be 'no-store' -Because $f }
+    }
+}
+
 BeforeAll {
     $script:RepoRootRun = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 }

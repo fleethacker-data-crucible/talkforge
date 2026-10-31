@@ -1,5 +1,5 @@
 // tests/tts-utils.test.mjs — pure-function tests (Node, no browser)
-import { splitSentences, pcmToWavArrayBuffer, filterSpeakers, parseModelsJson, speedToLengthScale, parseWav, concatWavBuffers } from '../assets/vendor/tts-utils.js';
+import { loadOnce, splitSentences, pcmToWavArrayBuffer, filterSpeakers, parseModelsJson, speedToLengthScale, parseWav, concatWavBuffers } from '../assets/vendor/tts-utils.js';
 import assert from 'node:assert/strict';
 
 function test(name, fn) {
@@ -130,6 +130,37 @@ test('concatWavBuffers inserts silence gaps and rejects mixed formats', () => {
   assert.throws(() => concatWavBuffers([a, pcmToWavArrayBuffer(new Float32Array([0.5]), 2000)]), /different formats/);
   assert.throws(() => concatWavBuffers([]), /No audio/);
   assert.throws(() => parseWav(new ArrayBuffer(8)), /RIFF/);
+});
+
+test('loadOnce: concurrent callers share one load, results are identical', async () => {
+  const inFlight = new Map();
+  let runs = 0;
+  const start = () => new Promise((r) => setTimeout(() => { runs++; r({ id: runs }); }, 20));
+  const [a, b, c] = await Promise.all([loadOnce(inFlight, 'm1', start), loadOnce(inFlight, 'm1', start), loadOnce(inFlight, 'm1', start)]);
+  assert.equal(runs, 1);
+  assert.equal(a, b);
+  assert.equal(b, c);
+  assert.equal(inFlight.size, 0, 'cleared when done');
+});
+
+test('loadOnce: different keys load independently; a later call after completion loads again', async () => {
+  const inFlight = new Map();
+  let runs = 0;
+  const start = async () => ++runs;
+  assert.deepEqual(await Promise.all([loadOnce(inFlight, 'a', start), loadOnce(inFlight, 'b', start)]), [1, 2]);
+  assert.equal(await loadOnce(inFlight, 'a', start), 3);
+});
+
+test('loadOnce: a failed load is shared by waiters, then forgotten so the next call retries', async () => {
+  const inFlight = new Map();
+  let runs = 0;
+  const start = async () => { runs++; if (runs === 1) throw new Error('boom'); return 'ok'; };
+  const first = [loadOnce(inFlight, 'm', start), loadOnce(inFlight, 'm', start)];
+  const results = await Promise.allSettled(first);
+  assert.deepEqual(results.map((r) => r.status), ['rejected', 'rejected']);
+  assert.equal(runs, 1);
+  assert.equal(await loadOnce(inFlight, 'm', start), 'ok');
+  assert.equal(runs, 2);
 });
 
 if (!process.exitCode) console.log('All tests passed.');
