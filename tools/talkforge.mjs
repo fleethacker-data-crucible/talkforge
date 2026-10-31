@@ -15,6 +15,7 @@ export const USAGE = `Usage:
   talkforge speak [text...] [options]    text from the arguments, or stdin when none (or "-")
   talkforge serve [options]              loopback-only speech endpoint
   talkforge voices list [--json] [--installed] [--assets <dir>]   which voices exist and which are installed
+  talkforge version [--json]             the TalkForge version (from the VERSION file)
 
 speak options:
   --out <file|->       output file, or - for stdout (default: stdout when piped; required on a terminal)
@@ -23,6 +24,7 @@ speak options:
   --speaker <n>        speaker id for multi-speaker voices
   --format <wav|mp3>   default wav (or taken from the --out extension)
   --assets <dir>       assets folder (default <repo>/assets, or env TALKFORGE_ASSETS)
+  --json               with --out <file>: print {schema: "talkforge.speak/1", out, format, voice, seconds, sampleRate, bytes} on stdout
 
 voices list: one line per voice (a * marks the default); --json prints {schema: "talkforge.voices/1", default, assets, voices: [...]};
   --installed hides voices whose model file is missing. speak and serve check --voice and --speaker against this list first.
@@ -44,7 +46,7 @@ class UsageError extends Error {}
 export function parseArgs(argv) {
   const [cmd, ...rest] = argv;
   if (!cmd || cmd === '-h' || cmd === '--help') return { cmd: 'help' };
-  if (!['speak', 'serve', 'voices'].includes(cmd)) throw new UsageError(`Unknown command: ${cmd}`);
+  if (!['speak', 'serve', 'voices', 'version'].includes(cmd)) throw new UsageError(`Unknown command: ${cmd}`);
   const o = { cmd, text: [], out: undefined, voice: undefined, speed: 1, speaker: 0, format: undefined, port: DEFAULT_PORT,
     json: false, installed: false, tokenFile: undefined, tokenFrom: undefined, lazaretteItem: undefined, idleTimeout: 0, assets: process.env.TALKFORGE_ASSETS || DEFAULT_ASSETS_DIR };
   const val = (i, n) => { if (i + 1 >= rest.length) throw new UsageError(`${n} needs a value`); return rest[i + 1]; };
@@ -74,7 +76,9 @@ export function parseArgs(argv) {
   if (o.tokenFrom && !['env', 'file', 'lazarette'].includes(o.tokenFrom)) throw new UsageError(`--token-from must be env, file or lazarette, got "${o.tokenFrom}"`);
   if (o.idleTimeout < 0) throw new UsageError('--idle-timeout must be 0 or more');
   if (cmd === 'voices' && !(o.text.length === 1 && o.text[0] === 'list')) throw new UsageError('Use: talkforge voices list');
-  if (cmd !== 'voices' && (o.json || o.installed)) throw new UsageError('--json and --installed belong to: talkforge voices list');
+  if (o.installed && cmd !== 'voices') throw new UsageError('--installed belongs to: talkforge voices list');
+  if (o.json && !['voices', 'speak', 'version'].includes(cmd)) throw new UsageError('--json is for: voices list, speak, version');
+  if (cmd === 'version' && o.text.length) throw new UsageError('version takes no arguments');
   if (cmd === 'serve' && o.text.length) throw new UsageError('serve takes no text');
   if (cmd === 'serve' && !(Number.isInteger(o.port) && o.port >= 0 && o.port < 65536)) throw new UsageError('--port must be 0 to 65535');
   return o;
@@ -120,13 +124,23 @@ async function speak(o) {
     if (process.stdout.isTTY) throw new UsageError('Give --out <file> (refusing to write audio to the terminal)');
     out = '-';
   }
+  if (o.json && out === '-') throw new UsageError('--json needs --out <file> (stdout carries the audio otherwise)');
   const format = o.format || (/\.mp3$/i.test(out) ? 'mp3' : 'wav');
   await checkVoice(o, o.voice ?? DEFAULT_VOICE);
   const synth = createSynthesizer({ assets: o.assets, defaultVoice: o.voice ?? DEFAULT_VOICE });
   const r = await synth.render({ text, voice: o.voice ?? DEFAULT_VOICE, speed: o.speed, speaker: o.speaker, format });
   if (out === '-') process.stdout.write(r.bytes);
   else await writeFile(resolve(out), r.bytes);
-  console.error(`${r.seconds.toFixed(2)} s ${format} (${r.voice})${out === '-' ? '' : ' -> ' + resolve(out)}`);
+  if (o.json) {
+    console.log(JSON.stringify({ schema: 'talkforge.speak/1', out: resolve(out), format, voice: r.voice, seconds: Number(r.seconds.toFixed(3)), sampleRate: r.sampleRate, bytes: r.bytes.length }));
+  } else {
+    console.error(`${r.seconds.toFixed(2)} s ${format} (${r.voice})${out === '-' ? '' : ' -> ' + resolve(out)}`);
+  }
+}
+
+async function version(o) {
+  const v = readVersion();
+  console.log(o.json ? JSON.stringify({ schema: 'talkforge.version/1', version: v, node: process.versions.node }) : v);
 }
 
 async function serve(o) {
@@ -154,7 +168,7 @@ export async function main(argv) {
   catch (e) { console.error(`Error: ${e.message}\n\n${USAGE}`); return 64; }
   if (o.cmd === 'help') { console.log(USAGE); return 0; }
   try {
-    await ({ speak, serve, voices }[o.cmd])(o);
+    await ({ speak, serve, voices, version }[o.cmd])(o);
     return 0;
   } catch (e) {
     if (e instanceof UsageError) { console.error(`Error: ${e.message}\n\n${USAGE}`); return 64; }

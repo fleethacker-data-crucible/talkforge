@@ -24,6 +24,9 @@ talkforge speak [text...] [--out <file|->] [--voice <id>] [--speed <n>] [--speak
 | `--speed` | 1 = normal, 1.1 = 10 percent faster. 0.25 to 4. |
 | `--speaker` | Speaker id for multi-speaker voices. Default 0. |
 | Output | WAV: 16-bit mono PCM, one header. MP3: mono, 128 kbps. Sample rate follows the voice (22,050 Hz for the default). One line on stderr: duration, format, voice. |
+| `--json` | With `--out <file>`: print one line `{"schema": "talkforge.speak/1", "out", "format", "voice", "seconds", "sampleRate", "bytes"}` on stdout instead of the stderr summary. Without `--out` it is a usage error. |
+
+Also: `talkforge version [--json]` (`talkforge.version/1`) and `talkforge voices list [--json] [--installed]` (`talkforge.voices/1`).
 
 **Exit codes.** `0` ok; `1` error (engine failure, silent output); `2` assets missing (stderr lists each missing file; nothing is downloaded); `64` bad usage (unknown option, no text, audio to a terminal).
 
