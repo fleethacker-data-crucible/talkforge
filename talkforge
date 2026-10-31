@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# talkforge - headless TalkForge (speak / serve). Needs Node 18+. Offline: local assets only.
+exec node "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/tools/talkforge.mjs" "$@"

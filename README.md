@@ -133,6 +133,28 @@ A bare array of scenes (or of strings) also works. `text` may be written `tts`. 
 
 Run the tests with `node tests/synth-cli.test.mjs`; the end-to-end case is skipped when the assets are absent (set `TALKFORGE_REQUIRE_ASSETS=1` to make that a failure).
 
+## Headless mode (for other apps)
+
+`talkforge speak` and `talkforge serve` (`talkforge.cmd` on Windows, `./talkforge` elsewhere; both run `tools/talkforge.mjs`, Node 18 or newer) let other apps use TalkForge without a browser. Everything is offline and uses the local assets; nothing is downloaded.
+
+```bash
+talkforge speak "Build finished." --out done.wav            # text from arguments
+echo "Piped text." | talkforge speak --format mp3 > out.mp3   # text from stdin, audio to stdout
+TALKFORGE_TOKEN=<16+ chars> talkforge serve                    # endpoint on 127.0.0.1:25009
+```
+
+`speak` options: `--out <file|->`, `--voice` (default en_US-lessac-high), `--speed` (1 = normal), `--speaker`, `--format wav|mp3`, `--assets <dir>`. Exit codes: 0 ok, 1 error, 2 assets missing, 64 bad usage.
+
+**Endpoint.** `serve` listens on **127.0.0.1 only** (there is no host option; default port 25009, the last port of TalkForge's block) and refuses to start without a token of 16+ characters, taken from env `TALKFORGE_TOKEN` or the first line of `--token-file`. The token is never printed or stored. Every request needs `Authorization: Bearer <token>`; requests with a non-loopback Host or any Origin header are refused with 403, bodies over 64 KB with 413.
+
+```bash
+curl -s http://127.0.0.1:25009/v1/audio/speech -H "Authorization: Bearer $TALKFORGE_TOKEN"   -H "Content-Type: application/json" -d '{"input":"Hello.","response_format":"mp3"}' -o hello.mp3
+```
+
+The request follows OpenAI `/v1/audio/speech` so Fairlead can route to it: `input` (up to 10,000 characters), `voice`, `speed` (0.25 to 4), `response_format` (`wav` default, or `mp3`), plus `speaker`. A `voice` that is not an installed Piper voice (for example `alloy`) falls back to the default voice; the voice used is in the `X-TalkForge-Voice` response header. Missing assets return 503 with the file list. Requests are synthesized one at a time.
+
+Tests: `node tests/headless.test.mjs` (the end-to-end cases skip without local assets).
+
 ## License
 
 MIT for the page and scripts. Model files follow the licenses of the upstream Piper voices (see each model’s MODEL_CARD on Hugging Face).
