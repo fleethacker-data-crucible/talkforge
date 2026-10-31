@@ -75,9 +75,53 @@ assets/
   models/          # .onnx.json configs (models come from Release)
 populate-assets.sh / .ps1 / .bat
 serve.sh / serve-windows.ps1 / serve.bat
+tools/             # synth-cli.mjs (voiceover CLI), node-engine.mjs, synth-lib.mjs
 tests/
 .github/workflows/
 ```
+
+## Voiceover CLI (demo narration)
+
+`tools/synth-cli.mjs` turns a script into one audio file per scene plus a timing file, from the command line, fully offline (local assets only, no browser, no network). It runs the same Piper engine as the page under Node 18 or newer.
+
+```bash
+node tools/synth-cli.mjs script.json --out audio            # WAV, default voice en_US-lessac-high
+node tools/synth-cli.mjs script.txt  --out audio --format mp3 --speed 1.05
+```
+
+**Script.** Plain text (one scene per blank-line paragraph, ids `scene-01`, `scene-02`, ...) or JSON:
+
+```json
+{
+  "voice": "en_US-lessac-high", "speed": 1.0, "sceneGap": 0.4,
+  "pronunciations": { "PacketRat": "packet rat" },
+  "scenes": [
+    { "id": "intro", "text": "PacketRat triages your inbox." },
+    { "id": "close", "text": "Thanks for watching.", "speed": 0.95, "voice": "en_US-amy-medium", "speaker": 0, "pauseAfter": 1 }
+  ]
+}
+```
+
+A bare array of scenes (or of strings) also works. `text` may be written `tts`. `id` becomes the file name (letters, digits, `. _ -`). `speed` is 1 = normal, 1.1 = 10 percent faster (0.25 to 4); it is applied once, as the model length scale. `pronunciations` are whole-word, case-insensitive replacements, like the page's pronunciation box.
+
+**Options.** `--out <dir>` (default `./voiceover`), `--voice`, `--speed`, `--speaker`, `--format wav|mp3` (mono, 22.05 kHz; MP3 is 128 kbps), `--scene-gap <sec>`, `--sentence-gap <sec>` (default 0.32, silence between sentences inside a scene), `--assets <dir>` (default `assets/` or env `TALKFORGE_ASSETS`).
+
+**Output.** `<out>/<id>.wav|mp3` and `<out>/timing.json`:
+
+```json
+{ "script": "script.json", "voice": "en_US-lessac-high", "format": "wav", "sampleRate": 22050,
+  "sentenceGap": 0.32, "totalSeconds": 6.317,
+  "scenes": [ { "id": "intro", "file": "intro.wav", "start": 0, "duration": 3.095,
+                "voice": "en_US-lessac-high", "speed": 1, "speaker": 0, "text": "..." } ] }
+```
+
+`start` and `duration` are in seconds. Scenes are laid end to end: the next `start` is the previous `start` + `duration` + that scene's `pauseAfter` (default `--scene-gap`, default 0). Files contain no trailing silence, so a renderer can place each file at its `start`. `text` is the text after pronunciation replacement.
+
+**Exit codes.** 0 ok; 1 error (bad script, silent output, engine failure); 2 assets missing (the message lists each missing file, and nothing is downloaded); 64 bad usage.
+
+**Assets.** The default voice needs `models/en_US-lessac-high.onnx` and its `.json`, `vendor/onnx/ort-wasm-simd-threaded.jsep.wasm` and `wasm/piper_phonemize.wasm` + `.data`. Get them with `populate-assets`. From another script, `import { synthesizeScript } from './tools/synth-cli.mjs'` returns the same timing object.
+
+Run the tests with `node tests/synth-cli.test.mjs`; the end-to-end case is skipped when the assets are absent (set `TALKFORGE_REQUIRE_ASSETS=1` to make that a failure).
 
 ## License
 
