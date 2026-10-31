@@ -28,6 +28,28 @@ function Test-PathUnderRoot([string]$Root, [string]$Full) {
     return $Full.StartsWith($trimRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)
 }
 
+# Request paths that must never be served even though they sit under the root: git internals, env files,
+# log files, and anything that is not a plain relative path (NUL, ':' for NTFS alternate streams or drive
+# letters). $Rel is the already-decoded path without the leading slash.
+function Test-RequestPathAllowed([string]$Rel) {
+    if ([string]::IsNullOrEmpty($Rel)) { return $true }
+    if ($Rel.IndexOf([char]0) -ge 0 -or $Rel.Contains(':')) { return $false }
+    $segments = $Rel -split '[\\/]'
+    foreach ($seg in $segments) {
+        if ($seg -ieq '.git' -or $seg -ilike '.env*') { return $false }
+    }
+    if ($segments[$segments.Count - 1] -ilike '*.log') { return $false }
+    return $true
+}
+
+# Immutable binaries (models, WASM) may be cached for a few minutes, so the page is not re-fetching ~18 MB per
+# sentence; everything else (the page, scripts, configs) stays no-store so edits show immediately.
+function Get-CacheControlFor([string]$Path) {
+    $ext = [IO.Path]::GetExtension($Path).ToLowerInvariant()
+    if ($ext -in '.onnx', '.wasm', '.data') { return 'private, max-age=300' }
+    return 'no-store'
+}
+
 function Show-Fatal([string]$text) {
     Write-Log "[FATAL] $text"
     try {
@@ -98,7 +120,7 @@ if (-not $NoBrowser) {
 function Send-File($res, $path, $req) {
     $ext = [IO.Path]::GetExtension($path).ToLower()
     $res.ContentType = if ($mime.ContainsKey($ext)) { $mime[$ext] } else { 'application/octet-stream' }
-    $res.Headers['Cache-Control'] = 'no-store'
+    $res.Headers['Cache-Control'] = Get-CacheControlFor $path
     $res.AddHeader('Accept-Ranges', 'bytes')
 
     $fs = [IO.File]::OpenRead($path)
@@ -149,11 +171,12 @@ try {
                 if ($fleet -eq 'shutdown') { $listener.Stop() }
                 continue
             }
-            $rel = [System.Uri]::UnescapeDataString($req.Url.LocalPath).TrimStart('/')
+            # Url.LocalPath is already percent-decoded once; decoding again would turn /..%255C into a real backslash.
+            $rel = $req.Url.LocalPath.TrimStart('/')
             if ([string]::IsNullOrEmpty($rel)) { $rel = 'TalkForge-tts.html' }
             $full = [IO.Path]::GetFullPath((Join-Path $Root $rel))
             # Prevent path traversal
-            if (-not (Test-PathUnderRoot $Root $full)) {
+            if (-not (Test-RequestPathAllowed $rel) -or -not (Test-PathUnderRoot $Root $full)) {
                 $res.StatusCode = 403
                 Write-Log "$($req.HttpMethod) /$rel -> 403"
             } elseif (Test-Path $full -PathType Leaf) {

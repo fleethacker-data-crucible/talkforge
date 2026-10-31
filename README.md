@@ -35,7 +35,7 @@ Open `TalkForge-tts.html` in a browser. The page loads everything from the local
 | In the repo (cloned) | In a GitHub Release (`.0` series only) |
 |----------------------|----------------------------------------|
 | Source, scripts, CI, docs | All `.onnx` model files |
-| Small JS (piper-tts-web, lamejs, engine) | `piper_phonemize.data` (~17 MB) |
+| Small JS (ONNX Runtime Web loader, lamejs, engine) | `piper_phonemize.data` (~17 MB) |
 | Small WASM (`piper_phonemize.wasm`) | ONNX Runtime WASM binaries |
 | `.onnx.json` configs | `release-base.txt` stamp |
 
@@ -67,6 +67,10 @@ After the workflow finishes, `populate-assets.sh` / `.ps1` / `.bat` will pull th
 Every asset in `assets-manifest.json` has a `sha256`. `populate-assets` downloads to a `.part` file, verifies it, and only then moves it into place; a mismatch is reported (expected vs actual), the file is not kept, and the script exits with code 1. Files already present are verified too. `.json` configs are hashed with CR bytes removed so CRLF checkouts match. `-Only` (PowerShell) or `TALKFORGE_ONLY` (shell) limits the run to wildcard patterns, for example `models/en_US-lessac-high*,wasm/*,vendor/onnx/*.jsep.wasm`.
 
 If the page cannot find a file it needs, it lists exactly which `assets/...` files are missing and what to run.
+
+### Private release (GitHub CLI)
+
+The repo's releases are private, so an anonymous download of the release returns 404. If the GitHub CLI is installed and signed in (`gh auth status` succeeds), `populate-assets` fetches each release asset with `gh release download` first, with no setup. The result is still checked against the manifest SHA-256; a mismatch from gh is final (nothing kept, no other source tried). If gh is missing, signed out, or the download fails, it falls back to the anonymous release URL as before. Control it with `TALKFORGE_GH=auto|on|off` (or `-UseGh` in PowerShell): `on` requires gh and never falls back; `off` never uses gh. The repo and tag come from the release base (`assets/release-base.txt`); `TALKFORGE_GH_REPO` and `TALKFORGE_GH_TAG` override them.
 
 ## Features
 
@@ -148,6 +152,8 @@ TALKFORGE_TOKEN=<16+ chars> talkforge serve                    # endpoint on 127
 ```
 
 `speak` options: `--out <file|->`, `--voice` (default en_US-lessac-high), `--speed` (1 = normal), `--speaker`, `--format wav|mp3`, `--assets <dir>`. Exit codes: 0 ok, 1 error, 2 assets missing, 64 bad usage.
+
+**Voices.** `talkforge voices list [--json] [--installed]` shows every voice the local assets know about (catalogue `assets/models.json` plus the `models/*.onnx.json` configs): id, installed or missing (the `.onnx` model file), speaker count, sample rate, language, and a `*` on the default. `--json` prints `{"schema": "talkforge.voices/1", "default", "assets", "voices": [...]}`. `speak --voice <id>` and `--speaker <n>` are checked against that list first: an unknown voice or a speaker out of range exits 64 and names the valid ones; a known voice whose model is not downloaded exits 2 (assets missing). The endpoint has the same list at `GET /v1/voices` (token required).
 
 **Endpoint.** `serve` listens on **127.0.0.1 only** (there is no host option; default port 25009, the last port of TalkForge's block) and refuses to start without a token of 16+ characters, taken from env `TALKFORGE_TOKEN` or the first line of `--token-file`. The token is never printed or stored. Every request needs `Authorization: Bearer <token>`; requests with a non-loopback Host or any Origin header are refused with 403, bodies over 64 KB with 413.
 

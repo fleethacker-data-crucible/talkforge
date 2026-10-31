@@ -17,6 +17,7 @@ import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { MissingAssetsError } from './node-engine.mjs';
 import { MIME } from './synth-core.mjs';
+import { listVoices } from './voices.mjs';
 
 export const LOOPBACK = '127.0.0.1';
 export const DEFAULT_PORT = 25009; // last port of TalkForge's 25000-25009 block (the page server starts at 25000)
@@ -116,6 +117,11 @@ export function startServer({ synth, token, port = DEFAULT_PORT, log = () => {},
         if (req.method !== 'POST' || req.headers['x-fleethacker-shutdown'] !== '1') return fail(res, 400, 'Shutdown needs POST with header X-FleetHacker-Shutdown: 1');
         sendJson(res, 202, { stopping: true });
         return stop('shutdown');
+      }
+      if (path === '/v1/voices') {
+        if (req.method !== 'GET') return fail(res, 405, 'Use GET', { allow: 'GET' });
+        const voices = await listVoices(synth.assetsDir, synth.defaultVoice);
+        return sendJson(res, 200, { object: 'list', default: synth.defaultVoice, data: voices.map((v) => ({ id: v.id, installed: v.installed, default: v.default, speakers: v.speakers, sample_rate: v.sampleRate, language: v.language })) });
       }
       if (path !== '/v1/audio/speech') return fail(res, 404, 'Not found');
       if (req.method !== 'POST') return fail(res, 405, 'Use POST', { allow: 'POST' });
