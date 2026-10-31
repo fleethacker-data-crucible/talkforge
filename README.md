@@ -8,7 +8,7 @@ Client-side neural text-to-speech in the browser. Runs Piper TTS models entirely
 
 ### Linux / macOS
 ```bash
-git clone https://github.com/seakintruth/talkforge.git
+git clone https://github.com/fleethacker-data-crucible/talkforge.git
 cd talkforge
 ./populate-assets.sh          # optional: downloads large models if not using a Release
 ./serve.sh                    # starts on http://127.0.0.1:25000 (or next free port)
@@ -16,7 +16,7 @@ cd talkforge
 
 ### Windows (PowerShell 5.1, no admin)
 ```bat
-git clone https://github.com/seakintruth/talkforge.git
+git clone https://github.com/fleethacker-data-crucible/talkforge.git
 cd talkforge
 populate-assets.bat           # optional: downloads large models
 serve.bat                     # starts the local server and opens the page
@@ -24,7 +24,7 @@ serve.bat                     # starts the local server and opens the page
 
 `serve.bat` uses port block **25000-25009** (edge-ops PORTS.md). Launching it while TalkForge is already running opens the running copy instead of starting another; an older running copy is asked to stop (`POST /__fleethacker/shutdown`) and replaced. `-Port <n>` uses exactly that port. `GET http://127.0.0.1:<port>/__fleethacker/id` reports the running tool, version (the page's `PAGE_VERSION`), pid and script path.
 
-Open `TalkForge-tts.html` in a browser. The page prefers local assets and falls back to CDN for development.
+Open `TalkForge-tts.html` in a browser. The page loads everything from the local `assets/` folder and makes no CDN or other external requests. If a model or WASM file is missing it stops with an error instead of fetching it from the internet; run `populate-assets` to download the files from the pinned GitHub Release.
 
 ## What’s in the repo vs. a Release
 
