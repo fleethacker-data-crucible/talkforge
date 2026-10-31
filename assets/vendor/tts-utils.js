@@ -69,6 +69,25 @@ export function parseModelsJson(data) {
     .map(m => ({ id: m.id, label: m.label || m.id, default: !!m.default }));
 }
 
+// Local files the page needs for a given model (paths relative to the assets folder).
+export function requiredAssetPaths(modelId) {
+  return [
+    `models/${modelId}.onnx`,
+    `models/${modelId}.onnx.json`,
+    'vendor/onnx/ort-wasm-simd-threaded.jsep.wasm',
+    'wasm/piper_phonemize.wasm',
+    'wasm/piper_phonemize.data'
+  ];
+}
+
+// Plain-language message for offline mode when files are absent.
+export function formatMissingAssets(missing) {
+  if (!missing || !missing.length) return '';
+  const list = missing.map(p => `assets/${p}`).join(', ');
+  return `Offline assets missing (${missing.length}): ${list}. ` +
+    'TalkForge never downloads these itself. Run populate-assets.bat (Windows) or ./populate-assets.sh, then reload.';
+}
+
 // Speed slider (1.0 = normal, 2.0 = twice as fast) -> Piper lengthScale.
 // lengthScale is the duration multiplier, so it is the reciprocal of speed.
 // This is the ONLY place speed is applied; do not also set playbackRate.

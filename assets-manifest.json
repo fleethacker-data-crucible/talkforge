@@ -1,114 +1,137 @@
 {
+  "_comment": "sha256 of every asset. Release assets: GitHub-recorded digest of the v1.3.0 release upload (verified equal to local copies of lessac-high, ort wasm and piper_phonemize). .onnx.json configs: hash of the committed text with CR bytes removed (checkouts may be CRLF).",
   "assets": [
     {
       "dest": "wasm/piper_phonemize.wasm",
       "url": "https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize.wasm",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "b777cd107a91d2bcc6a1ea46f2c26a662a7407394fe84589198aeaa83dd7a9d6"
     },
     {
       "dest": "wasm/piper_phonemize.data",
       "url": "https://cdn.jsdelivr.net/npm/@diffusionstudio/piper-wasm@1.0.0/build/piper_phonemize.data",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "29f1025eb23a5b5c192cd14a6efbce4509402ff265405072ee6f7d1a09b78f8c"
     },
     {
       "dest": "vendor/onnx/ort-wasm-simd-threaded.wasm",
       "url": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort-wasm-simd-threaded.wasm",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "71aef04959c5c1b6de461b6538e2058e306610034a85aad2742d0c7fd4533fe4"
     },
     {
       "dest": "vendor/onnx/ort-wasm-simd-threaded.jsep.wasm",
       "url": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort-wasm-simd-threaded.jsep.wasm",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "b45970d0632383a057c27ca5b660b216f8e00c17cf8db9f6207b5e4abc839368"
     },
     {
       "dest": "models/en_US-libritts_r-medium.onnx",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/en_US-libritts_r-medium.onnx",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "10bb85e071d616fcf4071f369f1799d0491492ab3c5d552ec19fb548fac13195"
     },
     {
       "dest": "models/en_US-libritts_r-medium.onnx.json",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts_r/medium/en_US-libritts_r-medium.onnx.json",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "b471dc60d2d8335e819c393d196d6fbf792817f40051257b269878505bc9afb3"
     },
     {
       "dest": "models/en_GB-vctk-medium.onnx",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/vctk/medium/en_GB-vctk-medium.onnx",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "4e9fc85ab9009385319fc6bae7f55577f8a2d7ee77fd9159a5500eb6531f41e6"
     },
     {
       "dest": "models/en_GB-vctk-medium.onnx.json",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/vctk/medium/en_GB-vctk-medium.onnx.json",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "7f85e6391ed0f7f46e4abd19345929a16be931a0c9945086f96692dce2087fa8"
     },
     {
       "dest": "models/en_US-lessac-medium.onnx",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f"
     },
     {
       "dest": "models/en_US-lessac-medium.onnx.json",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "efe19c417bed055f2d69908248c6ba650fa135bc868b0e6abb3da181dab690a0"
     },
     {
       "dest": "models/en_US-lessac-high.onnx",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/high/en_US-lessac-high.onnx",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "4cabf7c3a638017137f34a1516522032d4fe3f38228a843cc9b764ddcbcd9e09"
     },
     {
       "dest": "models/en_US-lessac-high.onnx.json",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/high/en_US-lessac-high.onnx.json",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "db42b97d9859f257bc1561b8ed980e7fb2398402050a74ddd6cbec931a92412f"
     },
     {
       "dest": "models/en_US-amy-medium.onnx",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "b3a6e47b57b8c7fbe6a0ce2518161a50f59a9cdd8a50835c02cb02bdd6206c18"
     },
     {
       "dest": "models/en_US-amy-medium.onnx.json",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "95a23eb4d42909d38df73bb9ac7f45f597dbfcde2d1bf9526fdeaf5466977d77"
     },
     {
       "dest": "models/en_US-hfc_female-medium.onnx",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_female/medium/en_US-hfc_female-medium.onnx",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "914c473788fc1fa8b63ace1cdcdb44588f4ae523d3ab37df1536616835a140b7"
     },
     {
       "dest": "models/en_US-hfc_female-medium.onnx.json",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_female/medium/en_US-hfc_female-medium.onnx.json",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "03f1fa0622b80463283592d97aca9f6e89aec345a5c56b7257723e0093c58b6c"
     },
     {
       "dest": "models/en_US-hfc_male-medium.onnx",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_male/medium/en_US-hfc_male-medium.onnx",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "d11e403a02bdf5a670c877b3dc56e0e1c8cece6fb30289586314dffdc0a78cb0"
     },
     {
       "dest": "models/en_US-hfc_male-medium.onnx.json",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_male/medium/en_US-hfc_male-medium.onnx.json",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "f66847424aed0bf99ecbb5d7cfde47c0a906f426a0daf7c46f305e7d21afd886"
     },
     {
       "dest": "models/en_GB-alan-medium.onnx",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "0a309668932205e762801f1efc2736cd4b0120329622adf62be09e56339d3330"
     },
     {
       "dest": "models/en_GB-alan-medium.onnx.json",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx.json",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "c0f0d124e5895c00e7c03b35dcc8287f319a6998a365b182deb5c8e752ee8c1e"
     },
     {
       "dest": "models/en_US-libritts-high.onnx",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts/high/en_US-libritts-high.onnx",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "9127a559e11603f10b366d1a20ac7426826081dbc521de4c2420c57728d73f0f"
     },
     {
       "dest": "models/en_US-libritts-high.onnx.json",
       "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/libritts/high/en_US-libritts-high.onnx.json",
-      "preferRelease": true
+      "preferRelease": true,
+      "sha256": "2efdc6d7f954588b8180132cbd9b8001933fdd00932c92bc92fd0d2028a9eb3d"
     }
   ]
 }

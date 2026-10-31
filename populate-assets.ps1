@@ -1,16 +1,26 @@
-﻿# populate-assets.ps1 — reads assets-manifest.json
-# Prefers the GitHub Release for entries with preferRelease=true.
+﻿# populate-assets.ps1 - downloads the files listed in assets-manifest.json and verifies SHA-256.
+# Prefers the GitHub Release for entries with preferRelease=true, then the upstream url.
+# Every entry must carry a sha256; a file that does not match is never kept and the script
+# exits with code 1 and lists what failed.
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1
 #   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1 -AssetRoot .\assets
+#   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1 -Only 'models/en_US-lessac-high*','wasm/*','vendor/onnx/*.jsep.wasm'
+#
+# -Only takes wildcard patterns matched against the manifest "dest" (default: everything).
+# Hash rule: .json files are hashed with CR bytes removed (checkouts may be CRLF).
+# PowerShell 5.1 compatible, no admin rights needed.
 
 param(
     [string]$AssetRoot = (Join-Path $PSScriptRoot 'assets'),
-    [string]$Manifest = (Join-Path $PSScriptRoot 'assets-manifest.json')
+    [string]$Manifest = (Join-Path $PSScriptRoot 'assets-manifest.json'),
+    [string[]]$Only
 )
 
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 
 if (-not (Test-Path $Manifest)) {
     throw "Manifest not found: $Manifest"
@@ -32,134 +42,159 @@ function Get-ReleaseBase {
             }
         }
     } catch {}
-    return 'https://github.com/seakintruth/talkforge/releases/download/v1.0.0'
+    return 'https://github.com/fleethacker-data-crucible/talkforge/releases/download/v1.0.0'
 }
 
 function ConvertTo-SeriesBase([string]$url) {
     return $url -replace '/releases/download/v(\d+)\.(\d+)\.\d+', '/releases/download/v$1.$2.0'
 }
 
+# Defined as text so the same function can be loaded inside the download runspaces.
+$hashFunctionText = @'
+function Get-AssetHash([string]$Path, [string]$Dest) {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        if ($Dest -like '*.json') {
+            $bytes = [IO.File]::ReadAllBytes($Path)
+            $keep = New-Object 'System.Collections.Generic.List[byte]' $bytes.Length
+            foreach ($b in $bytes) { if ($b -ne 13) { $keep.Add($b) } }
+            $h = $sha.ComputeHash($keep.ToArray())
+        } else {
+            $fs = [IO.File]::OpenRead($Path)
+            try { $h = $sha.ComputeHash($fs) } finally { $fs.Dispose() }
+        }
+    } finally { $sha.Dispose() }
+    return ([BitConverter]::ToString($h) -replace '-', '').ToLowerInvariant()
+}
+'@
+. ([scriptblock]::Create($hashFunctionText))
+
+# powershell -File passes -Only 'a','b' as one string, so also split on commas.
+if ($Only) { $Only = @($Only | ForEach-Object { $_ -split ',' } | Where-Object { $_ }) }
+
 $RELEASE_BASE = ConvertTo-SeriesBase (Get-ReleaseBase)
 Write-Host "Using release base: $RELEASE_BASE"
 Write-Host "Reading manifest: $Manifest"
 
-function Get-Asset([string]$Url, [string]$Dest) {
-    $name = Split-Path $Dest -Leaf
-    if (Test-Path $Dest) {
-        Write-Host "  [skip] $name already exists"
-        return $true
-    }
-    Write-Host "  [get]  $name"
-    $retries = 3
-    for ($i = 1; $i -le $retries; $i++) {
-        try {
-            Invoke-WebRequest -Uri $Url -OutFile $Dest -UseBasicParsing -TimeoutSec 300
-            return $true
-        } catch {
-            if ($i -eq $retries) { return $false }
-            Write-Host "  [retry $i] $name"
-            Start-Sleep -Seconds 2
-        }
-    }
-    return $false
+$data = Get-Content $Manifest -Raw -Encoding UTF8 | ConvertFrom-Json
+$entries = @($data.assets)
+Write-Host "Manifest entries: $($entries.Count)"
+
+$failures = New-Object System.Collections.ArrayList
+if ($Only -and -not ($entries | Where-Object { $d = [string]$_.dest; $Only | Where-Object { $d -like $_ } })) {
+    [void]$failures.Add("-Only matched no manifest entry: $($Only -join ', ')")
 }
-
-function Get-AssetPreferRelease([string]$Filename, [string]$FallbackUrl, [string]$Dest) {
-    if (Test-Path $Dest) {
-        Write-Host "  [skip] $(Split-Path $Dest -Leaf) already exists"
-        return
-    }
-    $releaseUrl = "$RELEASE_BASE/$Filename"
-    Write-Host "  [try]  $(Split-Path $Dest -Leaf) from release"
-    if (Get-Asset $releaseUrl $Dest) { return }
-    Write-Host "  [fallback] $(Split-Path $Dest -Leaf)"
-    if (-not (Get-Asset $FallbackUrl $Dest)) {
-        throw "Failed to download $(Split-Path $Dest -Leaf) from release or fallback"
-    }
-}
-
-# PowerShell 5.1 JSON parsers are unreliable here; extract fields with regex.
-$raw = Get-Content $Manifest -Raw -Encoding UTF8
-$matches = [regex]::Matches($raw, '"dest"\s*:\s*"([^"]+)"\s*,\s*"url"\s*:\s*"([^"]+)"\s*,\s*"preferRelease"\s*:\s*(true|false)')
-Write-Host "Manifest entries: $($matches.Count)"
-
-# Build the download list first
 $tasks = @()
-foreach ($m in $matches) {
-    $destPath = $m.Groups[1].Value
-    $url = $m.Groups[2].Value
-    $preferRelease = ($m.Groups[3].Value -eq 'true')
-    if (-not $destPath -or -not $url) { continue }
+foreach ($e in $entries) {
+    $destPath = [string]$e.dest
+    if (-not $destPath -or -not $e.url) { continue }
+    if ($Only) {
+        $hit = $false
+        foreach ($pat in $Only) { if ($destPath -like $pat) { $hit = $true } }
+        if (-not $hit) { continue }
+    }
+    $expected = ([string]$e.sha256).ToLowerInvariant()
     $dest = Join-Path $AssetRoot $destPath
+    $name = Split-Path $destPath -Leaf
+    if ($expected -notmatch '^[0-9a-f]{64}$') {
+        [void]$failures.Add("$name : manifest entry has no valid sha256 (refusing to use unverified files)")
+        continue
+    }
     $dir = Split-Path $dest -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
     if (Test-Path $dest) {
-        Write-Host "  [skip] $(Split-Path $dest -Leaf) already exists"
+        $actual = Get-AssetHash $dest $destPath
+        if ($actual -eq $expected) {
+            Write-Host "  [ok]   $name already present, SHA-256 verified"
+        } else {
+            [void]$failures.Add("$name : file exists but SHA-256 does not match (expected $expected, got $actual). Delete $dest and run again.")
+        }
         continue
     }
-    $filename = Split-Path $destPath -Leaf
-    $releaseUrl = if ($preferRelease) { "$RELEASE_BASE/$filename" } else { $null }
+    $releaseUrl = if ($e.preferRelease) { "$RELEASE_BASE/$name" } else { $null }
     $tasks += [pscustomobject]@{
-        Name       = $filename
-        Dest       = $dest
-        ReleaseUrl = $releaseUrl
-        FallbackUrl = $url
+        Name        = $name
+        Dest        = $dest
+        Expected    = $expected
+        ReleaseUrl  = $releaseUrl
+        FallbackUrl = [string]$e.url
     }
 }
 
-Write-Host "Downloading $($tasks.Count) file(s) with up to 8 parallel connections..."
+if ($tasks.Count -gt 0) {
+    Write-Host "Downloading $($tasks.Count) file(s) with up to 8 parallel connections..."
 
-# Download worker (runs inside a runspace)
-$worker = {
-    param($task)
-    function Try-Download($url, $dest) {
-        $retries = 3
-        for ($i = 1; $i -le $retries; $i++) {
-            try {
-                Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing -TimeoutSec 300
-                return $true
-            } catch {
-                if ($i -lt $retries) { Start-Sleep -Seconds 2 }
+    # Download worker (runs inside a runspace). Downloads to .part, verifies, then moves into place.
+    $worker = {
+        param($task, $hashFnText)
+        $ErrorActionPreference = 'Stop'
+        $ProgressPreference = 'SilentlyContinue'
+        try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
+        . ([scriptblock]::Create($hashFnText))
+        $part = $task.Dest + '.part'
+        $problems = @()
+        $urls = @()
+        if ($task.ReleaseUrl) { $urls += $task.ReleaseUrl }
+        $urls += $task.FallbackUrl
+        foreach ($url in $urls) {
+            $got = $false
+            for ($i = 1; $i -le 3 -and -not $got; $i++) {
+                try {
+                    Invoke-WebRequest -Uri $url -OutFile $part -UseBasicParsing -TimeoutSec 300
+                    $got = $true
+                } catch {
+                    if ($i -lt 3) { Start-Sleep -Seconds 2 }
+                    else { $problems += "download failed from $url ($($_.Exception.Message))" }
+                }
             }
+            if (-not $got) { Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue; continue }
+            $actual = Get-AssetHash $part $task.Dest
+            if ($actual -eq $task.Expected) {
+                Move-Item -LiteralPath $part -Destination $task.Dest -Force
+                return [pscustomobject]@{ Name = $task.Name; Ok = $true; Message = "verified  $($task.Name)  <-  $url" }
+            }
+            $problems += "SHA-256 MISMATCH from $url (expected $($task.Expected), got $actual)"
+            Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
         }
-        return $false
+        return [pscustomobject]@{ Name = $task.Name; Ok = $false; Message = ($problems -join '; ') }
     }
-    $name = $task.Name
-    if ($task.ReleaseUrl) {
-        if (Try-Download $task.ReleaseUrl $task.Dest) {
-            return "release  $name  <-  $($task.ReleaseUrl)"
+
+    $pool = [runspacefactory]::CreateRunspacePool(1, 8)
+    $pool.Open()
+    $jobs = @()
+    foreach ($task in $tasks) {
+        $ps = [powershell]::Create()
+        $ps.RunspacePool = $pool
+        [void]$ps.AddScript($worker).AddArgument($task).AddArgument($hashFunctionText)
+        $jobs += [pscustomobject]@{ Pipe = $ps; Handle = $ps.BeginInvoke(); Name = $task.Name }
+    }
+
+    while ($jobs | Where-Object { -not $_.Handle.IsCompleted }) {
+        Start-Sleep -Milliseconds 500
+    }
+    Write-Host ""
+    Write-Host "Sources:"
+    foreach ($job in $jobs) {
+        $result = $job.Pipe.EndInvoke($job.Handle) | Select-Object -Last 1
+        if ($result -and $result.Ok) {
+            Write-Host "  $($result.Message)"
+        } else {
+            $msg = if ($result) { $result.Message } else { 'worker returned nothing' }
+            Write-Host "  FAIL     $($job.Name)  ($msg)"
+            [void]$failures.Add("$($job.Name) : $msg")
         }
+        $job.Pipe.Dispose()
     }
-    if (Try-Download $task.FallbackUrl $task.Dest) {
-        return "fallback $name  <-  $($task.FallbackUrl)"
-    }
-    return "FAIL     $name  (tried release and $($task.FallbackUrl))"
+    $pool.Close()
+    $pool.Dispose()
 }
-
-$pool = [runspacefactory]::CreateRunspacePool(1, 8)
-$pool.Open()
-$jobs = @()
-foreach ($task in $tasks) {
-    $ps = [powershell]::Create()
-    $ps.RunspacePool = $pool
-    [void]$ps.AddScript($worker).AddArgument($task)
-    $jobs += [pscustomobject]@{ Pipe = $ps; Handle = $ps.BeginInvoke(); Name = $task.Name }
-}
-
-# Wait and report
-while ($jobs | Where-Object { -not $_.Handle.IsCompleted }) {
-    Start-Sleep -Milliseconds 500
-}
-Write-Host ""
-Write-Host "Sources:"
-foreach ($job in $jobs) {
-    $result = $job.Pipe.EndInvoke($job.Handle)
-    Write-Host "  $result"
-    $job.Pipe.Dispose()
-}
-$pool.Close()
-$pool.Dispose()
 
 Write-Host ""
-Write-Host "Done."
+if ($failures.Count -gt 0) {
+    Write-Host "FAILED: $($failures.Count) asset(s) could not be verified:" -ForegroundColor Red
+    foreach ($f in $failures) { Write-Host "  - $f" -ForegroundColor Red }
+    Write-Host "No unverified file was kept. Fix the problem above and run this script again."
+    exit 1
+}
+Write-Host "Done. All assets verified (SHA-256)."
 Write-Host "Assets under: $AssetRoot"

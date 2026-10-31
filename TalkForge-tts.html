@@ -431,7 +431,7 @@
     }
 
     // Import pure helpers (also tested under Node)
-    const { splitSentences, filterSpeakers, speedToLengthScale, concatWavBuffers } = await import(`${ASSET_BASE}/vendor/tts-utils.js`);
+    const { splitSentences, filterSpeakers, requiredAssetPaths, formatMissingAssets, speedToLengthScale, concatWavBuffers } = await import(`${ASSET_BASE}/vendor/tts-utils.js`);
 
     // Probe whether local phonemize data is reachable
     async function checkLocalWasm() {
@@ -571,6 +571,15 @@
         data: `${ASSET_BASE}/wasm/piper_phonemize.data`
       };
       try {
+        // Offline mode: say plainly which local files are missing instead of a cryptic engine error.
+        const missing = [];
+        for (const rel of requiredAssetPaths(modelId)) {
+          try {
+            const r = await fetch(`${ASSET_BASE}/${rel}`, { method: 'HEAD' });
+            if (!r.ok) missing.push(rel);
+          } catch (_) { missing.push(rel); }
+        }
+        if (missing.length) throw new Error(formatMissingAssets(missing));
         const { PiperEngine } = await import(`${ASSET_BASE}/vendor/piper-engine.js`);
         engine = await PiperEngine.load(modelUrl, configUrl, wasmBase, phonemePaths);
         engineModel = modelId;
