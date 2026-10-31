@@ -431,7 +431,7 @@
     }
 
     // Import pure helpers (also tested under Node)
-    const { splitSentences, filterSpeakers } = await import(`${ASSET_BASE}/vendor/tts-utils.js`);
+    const { splitSentences, filterSpeakers, speedToLengthScale, concatWavBuffers } = await import(`${ASSET_BASE}/vendor/tts-utils.js`);
 
     // Probe whether local phonemize data is reachable
     async function checkLocalWasm() {
@@ -592,7 +592,9 @@
       const sid = Number(speakerId) || 0;
       const speed = parseFloat(speedEl.value) || 1.0;
       appendDebug(`PiperEngine.synthesize voice=${voiceId} speaker=${sid} speed=${speed} textLen=${text.length}`, 'status');
-      const blob = await eng.synthesize(text, sid, speed);
+      // Speed is applied exactly once, here, as the model lengthScale (1/speed).
+      // Playback must stay at playbackRate 1 or the two would partly cancel.
+      const blob = await eng.synthesize(text, sid, speedToLengthScale(speed));
       appendDebug(`Generated blob size=${blob.size}`, 'status');
       return blob;
     }
@@ -667,7 +669,7 @@
       const startNext = (idx, v, s) => {
         if (idx >= chunks.length || stopRequested) return null;
         const c = chunks[idx];
-        if (idx === 0 && pregenBlob && pregenKey && pregenKey.startsWith(v + ':' + s)) {
+        if (idx === 0 && pregenBlob && pregenKey && pregenKey.startsWith(v + ':' + s + ':' + getSpeed() + ':')) {
           const b = pregenBlob;
           pregenBlob = null;
           return Promise.resolve(b);
@@ -712,7 +714,7 @@
           audioQueue.push({ text: chunk, blob, url });
 
           audioEl.src = url;
-          audioEl.playbackRate = getSpeed();
+          audioEl.playbackRate = 1; // speed is baked into the audio via lengthScale
           audioEl.volume = getVolume();
           startHighlight(chunk, fullText);
           await new Promise((resolve, reject) => {
@@ -865,7 +867,9 @@
           blobs.push(await generateChunk(chunks[i], modelEl.value, voiceEl.value));
         }
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob(blobs, { type: 'audio/wav' }));
+        // One valid header + concatenated PCM (not whole WAV files back to back).
+        const joined = concatWavBuffers(await Promise.all(blobs.map(b => b.arrayBuffer())));
+        a.href = URL.createObjectURL(new Blob([joined], { type: 'audio/wav' }));
         a.download = hasSelection ? 'speech-selection.wav' : 'speech.wav';
         a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -899,7 +903,7 @@
       if (!chunks.length) return;
       const voiceId = modelEl.value;
       const speakerId = voiceEl.value;
-      const key = voiceId + ':' + speakerId + ':' + chunks[0].slice(0, 40);
+      const key = voiceId + ':' + speakerId + ':' + getSpeed() + ':' + chunks[0].slice(0, 40);
       if (pregenKey === key && pregenBlob) return; // already done
       pregenKey = key;
       pregenBlob = null;
