@@ -24,7 +24,7 @@ The repo has no sanitize items: no personal data, internal docs or secrets were 
 ## 3. Bugs
 
 - [x] **MEDIUM: "Download WAV" writes a malformed file.** `TalkForge-tts.html:865` concatenates whole WAV blobs, each with its own RIFF header, so most players play only the first one. Merge the PCM data under a single header. Fixed: one header plus concatenated PCM.
-- [ ] **MEDIUM: the release workflow fails when main has moved.** `.github/workflows/release.yml:42` runs `git push origin HEAD:main` from the detached tag checkout, which fails non-fast-forward once main is past the tag. The stamp commit also lands after the tag, so the tag's source zip carries the old `release-base.txt`.
+- [x] **MEDIUM: the release workflow fails when main has moved.** `.github/workflows/release.yml:42` runs `git push origin HEAD:main` from the detached tag checkout, which fails non-fast-forward once main is past the tag. The stamp commit also lands after the tag, so the tag's source zip carries the old `release-base.txt`. Fixed on main: the workflow no longer commits to main; the stamp ships as a release asset.
 - [x] **MEDIUM: populate-assets has a stale fallback and fails silently.** `populate-assets.sh:44,48` and `populate-assets.ps1:31,35` fall back to `v1.0.0` while `assets/release-base.txt` says v1.2.0. The ps1 worker prints `FAIL` (line 136) but exits 0, and the `.bat` just pauses. Fixed: default is v1.3.0 of the org repo, exit code 1 on any failure.
 - [x] **MEDIUM: PS 5.1 downloads can fail on TLS.** `populate-assets.ps1` never sets `[Net.ServicePointManager]::SecurityProtocol` to TLS 1.2, so `Invoke-WebRequest` fails on many Windows 10 / .NET 4.x setups. Also: Fixed: TLS 1.2 set, JSON parsed with ConvertFrom-Json, unused functions removed.
   - line 83 assigns to the automatic `$matches`
@@ -44,5 +44,5 @@ The repo has no sanitize items: no personal data, internal docs or secrets were 
 ## 5. Cleanup
 
 - [x] **Add a `.gitignore`.** There isn't one, so downloaded `.onnx`/`.data` files and `serve-windows.log` can be committed by accident. Exists.
-- [ ] **Remove unused files** (`voices_static` is already gone): `onnx/ort.wasm.min.mjs` and `onnx/ort-wasm-simd-threaded.mjs`. The manifest and `release.yml:66` also ship the unused non-jsep `ort-wasm-simd-threaded.wasm`.
+- [x] **Remove unused files:** `onnx/ort.wasm.min.mjs`, `onnx/ort-wasm-simd-threaded.mjs` and the non-jsep `ort-wasm-simd-threaded.wasm` manifest entry are gone. Checked in a real browser (page loaded the lessac-high model, played, and Download WAV produced one valid header, 3 sections, non-silent) and by a test that `ort.min.mjs` asks only for the jsep files.
 - [x] **Remove unused code in `TalkForge-tts.html`:** `checkLocalWasm` (437), `MULTI_SPEAKER_MODELS` (411) and `currentSession` (399). Removed.
