@@ -8,7 +8,7 @@ Turn text into natural speech entirely in the browser, offline, and download it 
 
 - Windows PowerShell 5.1 (part of Windows). No administrator rights and no installer.
 - Microsoft Edge or Google Chrome.
-- Launch: Run `populate-assets.bat` once for the voice models, then `serve.bat` (opens `http://127.0.0.1:25000` or the next free port).
+- Launch: Run `populate-assets.bat` once for the voice models, then `TalkForge.bat` (`serve.bat` still works) (opens `http://127.0.0.1:25000` or the next free port).
 
 ## Steps
 
