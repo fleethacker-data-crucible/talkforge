@@ -157,6 +157,8 @@ curl -s http://127.0.0.1:25009/v1/audio/speech -H "Authorization: Bearer $TALKFO
 
 The request follows OpenAI `/v1/audio/speech` so Fairlead can route to it: `input` (up to 10,000 characters), `voice`, `speed` (0.25 to 4), `response_format` (`wav` default, or `mp3`), plus `speaker`. A `voice` that is not an installed Piper voice (for example `alloy`) falls back to the default voice; the voice used is in the `X-TalkForge-Voice` response header. Missing assets return 503 with the file list. Requests are synthesized one at a time.
 
+**Lifecycle.** `GET /__fleethacker/id` (same shape as the page server: `tool`, `version`, `pid`, `path`) and `GET /__fleethacker/heartbeat` (`ok`, `uptimeSeconds`, `lastRequestAt`, `requests`, `idleTimeoutSeconds`) need no token (loopback only, nothing sensitive); polling them does not count as activity. `POST /__fleethacker/shutdown` needs the token and the header `X-FleetHacker-Shutdown: 1` and stops the server gracefully. `--idle-timeout <minutes>` stops it after that long without a speech request (default 0 = run until stopped). `VERSION` at the repo root holds the version (kept equal to `PAGE_VERSION` in the page; a test checks it, so bump both together).
+
 Tests: `node tests/headless.test.mjs` (the end-to-end cases skip without local assets).
 
 ## License

@@ -92,3 +92,8 @@ jobs:
         env:
           TALKFORGE_REQUIRE_ASSETS: '1'
         run: node tests/headless.test.mjs
+
+      - name: Lifecycle (heartbeat, idle timeout) with real process
+        env:
+          TALKFORGE_REQUIRE_ASSETS: '1'
+        run: node tests/lifecycle.test.mjs

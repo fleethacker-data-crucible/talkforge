@@ -69,9 +69,20 @@ function readBody(req, limit) {
 
 // synth: createSynthesizer() result. options: { token, port (0 = any free), assetsDir, log }
 // Resolves { server, port, close() } once listening.
-export function startServer({ synth, token, port = DEFAULT_PORT, log = () => {} }) {
+//   lifecycle: version/scriptPath are reported by /__fleethacker/id; idleTimeoutMs (0 = off) stops the
+//   server after that long without a speech request; onStop(reason) is called for 'shutdown' or 'idle'.
+export function startServer({ synth, token, port = DEFAULT_PORT, log = () => {}, version = '0.0.0', scriptPath = '', idleTimeoutMs = 0, onStop = () => {} }) {
   token = checkToken(token);
   let boundPort = port;
+  const startedAt = Date.now();
+  let lastRequestAt = null;
+  let requests = 0;
+  let idleTimer = null;
+  const stop = (reason) => { clearTimeout(idleTimer); log(`stopping: ${reason}`); setImmediate(() => onStop(reason)); };
+  const armIdle = () => {
+    clearTimeout(idleTimer);
+    if (idleTimeoutMs > 0) { idleTimer = setTimeout(() => stop('idle'), idleTimeoutMs); idleTimer.unref?.(); }
+  };
 
   async function voiceFor(requested) {
     if (typeof requested === 'string' && /^[A-Za-z0-9_.-]+$/.test(requested)) {
@@ -85,10 +96,27 @@ export function startServer({ synth, token, port = DEFAULT_PORT, log = () => {} 
       if (!hostOk(req.headers.host, boundPort) || req.headers.origin !== undefined) {
         return fail(res, 403, 'Forbidden: loopback callers only');
       }
+      const path = new URL(req.url, 'http://127.0.0.1').pathname;
+      // Lifecycle probes need no token (loopback only, nothing sensitive): who is running, and is it alive.
+      if (req.method === 'GET' && path === '/__fleethacker/id') {
+        return sendJson(res, 200, { tool: 'talkforge', version, pid: process.pid, path: scriptPath });
+      }
+      if (req.method === 'GET' && path === '/__fleethacker/heartbeat') {
+        return sendJson(res, 200, {
+          ok: true, tool: 'talkforge', version, pid: process.pid, port: boundPort,
+          uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
+          lastRequestAt: lastRequestAt && new Date(lastRequestAt).toISOString(), requests,
+          idleTimeoutSeconds: Math.round(idleTimeoutMs / 1000)
+        });
+      }
       if (!tokenMatches(req.headers.authorization, token)) {
         return fail(res, 401, 'Missing or wrong bearer token', { 'www-authenticate': 'Bearer' });
       }
-      const path = new URL(req.url, 'http://127.0.0.1').pathname;
+      if (path === '/__fleethacker/shutdown') {
+        if (req.method !== 'POST' || req.headers['x-fleethacker-shutdown'] !== '1') return fail(res, 400, 'Shutdown needs POST with header X-FleetHacker-Shutdown: 1');
+        sendJson(res, 202, { stopping: true });
+        return stop('shutdown');
+      }
       if (path !== '/v1/audio/speech') return fail(res, 404, 'Not found');
       if (req.method !== 'POST') return fail(res, 405, 'Use POST', { allow: 'POST' });
 
@@ -105,6 +133,7 @@ export function startServer({ synth, token, port = DEFAULT_PORT, log = () => {} 
 
       const voice = await voiceFor(body.voice);
       const t0 = Date.now();
+      lastRequestAt = t0; requests++; armIdle(); // a real speech request is the only activity that resets the idle timer
       let r;
       try { r = await synth.render({ text: input, voice, speed, speaker, format }); }
       catch (e) {
@@ -127,7 +156,8 @@ export function startServer({ synth, token, port = DEFAULT_PORT, log = () => {} 
     server.once('error', reject);
     server.listen(port, LOOPBACK, () => {
       boundPort = server.address().port;
-      resolve({ server, port: boundPort, close: () => new Promise((r) => { server.close(() => r()); server.closeAllConnections?.(); }) });
+      armIdle();
+      resolve({ server, port: boundPort, close: () => new Promise((r) => { clearTimeout(idleTimer); server.close(() => r()); server.closeAllConnections?.(); }) });
     });
   });
 }
