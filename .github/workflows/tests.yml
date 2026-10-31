@@ -87,3 +87,8 @@ jobs:
         env:
           TALKFORGE_REQUIRE_ASSETS: '1'
         run: node tests/synth-cli.test.mjs
+
+      - name: Headless endpoint and speak end to end
+        env:
+          TALKFORGE_REQUIRE_ASSETS: '1'
+        run: node tests/headless.test.mjs
