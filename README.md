@@ -35,7 +35,7 @@ Open `TalkForge-tts.html` in a browser. The page loads everything from the local
 | In the repo (cloned) | In a GitHub Release (`.0` series only) |
 |----------------------|----------------------------------------|
 | Source, scripts, CI, docs | All `.onnx` model files |
-| Small JS (piper-tts-web, lamejs, engine) | `piper_phonemize.data` (~17 MB) |
+| Small JS (ONNX Runtime Web loader, lamejs, engine) | `piper_phonemize.data` (~17 MB) |
 | Small WASM (`piper_phonemize.wasm`) | ONNX Runtime WASM binaries |
 | `.onnx.json` configs | `release-base.txt` stamp |
 

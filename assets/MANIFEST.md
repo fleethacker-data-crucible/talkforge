@@ -1,54 +1,39 @@
-# Local Asset Manifest for TalkForge-tts Intranet Build
+# Local assets for TalkForge-tts
 
-This directory holds all vendor libraries, WASM binaries, and voice models required for fully offline / intranet-only operation.
+Everything the page needs for offline use lives under this folder. `assets-manifest.json` (repo root) is the source of truth: every file in it has a `sha256`, and `populate-assets` downloads and verifies the large ones. Small files are committed.
 
-## Directory layout
+## Layout
 
 ```
 assets/
-├── vendor/
-│   ├── piper-tts-web.js          # ESM build of @realtimex/piper-tts-web (or equivalent)
-│   ├── lame.min.js               # lamejs MP3 encoder
-│   └── onnxruntime-web/          # Optional: full onnxruntime-web package if not bundled
-│       ├── ort.min.js
-│       ├── ort-wasm.wasm
-│       └── ...
+├── models.json                       # voice catalogue shown in the page (committed)
+├── release-base.txt                  # release the large files come from (committed)
+├── models/
+│   ├── <voice>.onnx.json             # voice config (committed)
+│   └── <voice>.onnx                  # model, 60-140 MB (populate-assets)
 ├── wasm/
-│   ├── onnx/                     # ONNX Runtime WebAssembly files
-│   │   ├── ort-wasm.wasm
-│   │   ├── ort-wasm-simd.wasm
-│   │   └── ...
-│   ├── piper_phonemize.wasm
-│   └── piper_phonemize.data
-└── models/
-    ├── en_US-libritts_r-medium.onnx
-    ├── en_US-libritts_r-medium.onnx.json
-    ├── en_US-libritts-high.onnx          # optional
-    ├── en_US-libritts-high.onnx.json     # optional
-    ├── en_US-lessac-medium.onnx          # optional
-    └── en_US-lessac-medium.onnx.json     # optional
+│   ├── piper_phonemize.wasm          # phonemizer (committed)
+│   └── piper_phonemize.data          # ~18 MB (populate-assets)
+└── vendor/
+    ├── piper-engine.js, tts-utils.js # engine and pure helpers (committed)
+    ├── lame.min.js                   # MP3 encoder (committed)
+    ├── dist/piper-o91UDS6e.js        # phonemizer loader (committed)
+    ├── onnx/
+    │   ├── ort.min.mjs, ort-wasm-simd-threaded.jsep.mjs   # ONNX Runtime Web (committed)
+    │   └── ort-wasm-simd-threaded.jsep.wasm               # ~22 MB (populate-assets)
+    └── ui-kit/                       # fonts and styles (committed)
 ```
 
-## Required files (minimum viable)
+## What a voice needs
 
-| File | Approx. size | Source |
-|------|--------------|--------|
-| piper-tts-web.js | ~25 KB | npm pack `@realtimex/piper-tts-web` or build from source |
-| lame.min.js | ~100 KB | npm `lamejs` or jsDelivr |
-| piper_phonemize.wasm | ~1–2 MB | `@diffusionstudio/piper-wasm` or library dist |
-| piper_phonemize.data | ~5–10 MB | same |
-| ONNX Runtime WASM | ~5–15 MB | `onnxruntime-web` package |
-| en_US-libritts_r-medium.onnx | ~75 MB | huggingface.co/rhasspy/piper-voices |
-| en_US-libritts_r-medium.onnx.json | ~20 KB | same |
+For voice `<id>`: `models/<id>.onnx`, `models/<id>.onnx.json`, `vendor/onnx/ort-wasm-simd-threaded.jsep.wasm`, `wasm/piper_phonemize.wasm` and `wasm/piper_phonemize.data`. The page checks these five before loading and lists any that are missing; `node tools/talkforge.mjs voices list` shows which voices are installed.
 
-## Optional models
+## Getting the large files
 
-- `en_US-libritts-high` (~137 MB) – higher quality, 904 speakers
-- `en_US-lessac-medium` / `en_US-lessac-high` – single-speaker alternatives
+Run `populate-assets.bat` (Windows) or `./populate-assets.sh`. They download from the GitHub Release named in `release-base.txt`, using the GitHub CLI when it is signed in, and verify every file against `assets-manifest.json`. See the README ("Integrity checks", "No CDN fallback").
 
 ## Notes
 
-- All paths in the revised `TalkForge-tts.html` are relative and point into this `assets/` tree.
-- Place the files exactly as listed; the page will fail gracefully with a clear status message if a required asset is missing.
-- After the first successful load, models are also cached in the browser’s Origin Private File System by the library.
-- For production intranet, serve the entire `artifacts/` folder (or just the HTML + assets) from any static file server.
+- All paths in `TalkForge-tts.html` are relative to this folder.
+- The page and the Node tools make no network requests.
+- Models are cached by the browser after the first load.

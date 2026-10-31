@@ -1,130 +1,54 @@
-# TalkForge-tts Local-Asset Playbook
+# TalkForge-tts local-asset playbook
 
-Self-hosting guide for the client-side TalkForge-tts page so it runs entirely on an intranet with no external CDN or Hugging Face calls.
+How to get TalkForge-tts running on an intranet or an offline machine, with no CDN or Hugging Face calls at run time.
 
-## Goal
+## What runs where
 
-Replace every external dependency with files served from the same origin (or an internal static host) so the page works offline or behind a firewall.
+The page (`TalkForge-tts.html`) and the Node tools (`tools/talkforge.mjs`, `tools/synth-cli.mjs`) load everything from `assets/`. The layout and the files each voice needs are in [assets/MANIFEST.md](assets/MANIFEST.md).
 
-## Directory structure
-
-```
-TalkForge-tts.html
-assets/
-├── MANIFEST.md
-├── vendor/
-│   ├── piper-tts-web.js
-│   └── lame.min.js
-├── wasm/
-│   ├── onnx/                  # ONNX Runtime WASM binaries
-│   ├── piper_phonemize.wasm
-│   └── piper_phonemize.data
-└── models/
-    ├── en_US-libritts_r-medium.onnx
-    ├── en_US-libritts_r-medium.onnx.json
-    └── ... (other voices)
-```
-
-## Step 1 – Obtain the JavaScript libraries
-
-### piper-tts-web
-```bash
-npm pack @realtimex/piper-tts-web@1.1.1
-# or clone the repo and build
-# Extract dist/piper-tts-web.js into assets/vendor/
-```
-
-### lamejs
-```bash
-npm pack lamejs
-# copy lame.min.js (or lame.all.js) into assets/vendor/
-```
-
-Alternatively download once from a machine that has internet access and copy the files across.
-
-## Step 2 – Obtain WASM binaries
-
-The library expects ONNX Runtime WebAssembly and the Piper phonemizer.
-
-Typical sources:
-- `onnxruntime-web` npm package → `dist/*.wasm`
-- `@diffusionstudio/piper-wasm` or the files referenced in the piper-tts-web fixtures
-
-Place them under `assets/wasm/` as shown above.  
-Update the `wasmPaths` object in the HTML if your filenames differ.
-
-## Step 3 – Obtain voice models
-
-Download from the official Piper voices repository:
-
-- https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/libritts_r/medium
-- https://huggingface.co/rhasspy/piper-voices/tree/main/en/en_US/libritts/high
-- (or the diffusionstudio mirror used by some browser builds)
-
-Required pair for the default model:
-- `en_US-libritts_r-medium.onnx` (~75 MB)
-- `en_US-libritts_r-medium.onnx.json`
-
-Copy into `assets/models/`.
-
-## Step 4 – Configure the page
-
-The revised `TalkForge-tts.html` already defaults to relative paths:
-
-```js
-const ASSET_BASE = './assets';
-// ...
-wasmPaths: {
-  onnxWasm: `${ASSET_BASE}/wasm/onnx/`,
-  piperData: `${ASSET_BASE}/wasm/piper_phonemize.data`,
-  piperWasm: `${ASSET_BASE}/wasm/piper_phonemize.wasm`
-}
-```
-
-If you need a different base path (e.g. `/static/tts/`), change the single `ASSET_BASE` constant.
-
-## Step 5 – Serve
-
-Any static file server works:
+## Step 1 - Get the files (on a machine with access)
 
 ```bash
-# from the directory containing TalkForge-tts.html and assets/
-python3 -m http.server 8080
-# or nginx, Caddy, IIS, etc.
+git clone https://github.com/fleethacker-data-crucible/talkforge.git
+cd talkforge
+./populate-assets.sh          # or populate-assets.bat on Windows
 ```
 
-Open `http://your-intranet-host/TalkForge-tts.html`.
+`populate-assets` downloads the models, `piper_phonemize.data` and the ONNX Runtime WASM from the GitHub Release in `assets/release-base.txt`, and checks each against the SHA-256 in `assets-manifest.json`. It uses `gh release download` when the GitHub CLI is signed in (the repo is private); otherwise the anonymous release URL. Upstream CDN / Hugging Face is used only if you opt in (`-AllowUpstream` / `TALKFORGE_ALLOW_UPSTREAM=1`).
+
+To carry only some voices, limit the run: `TALKFORGE_ONLY="models/en_US-lessac-high*,wasm/*,vendor/onnx/*.jsep.wasm" ./populate-assets.sh` (PowerShell: `-Only`).
+
+## Step 2 - Move the folder to the offline machine
+
+Copy the whole repo folder (it now contains the large files). Nothing else is needed at run time except a browser, and PowerShell 5.1 (Windows) or Python 3 (Linux) for the local server; Node 18+ if you use the command-line tools.
+
+## Step 3 - Serve and open
+
+- Windows: `TalkForge.bat` (starts `Start-TalkForge.ps1` on a free port in 25000-25009 and opens the page).
+- Linux: `./serve.sh` (a dev convenience built on Python's `http.server`, bound to 127.0.0.1).
+
+Any other static file server also works if it serves the repo folder and sends `.wasm` as `application/wasm`.
 
 ## Verification checklist
 
-- [ ] `TalkForge-tts.html` loads without console 404s for JS
-- [ ] Model selector shows “LibriTTS-R Medium”
-- [ ] First Play triggers local model load (progress bar) and speech
-- [ ] Subsequent plays are instant (browser + OPFS cache)
-- [ ] Download MP3 produces a single concatenated file
-- [ ] Network tab shows zero requests to jsdelivr, unpkg, or huggingface.co
+- [ ] The page loads with no 404s in the browser console.
+- [ ] Pressing Play shows the model loading, then speech. If a file is missing, the status line names each missing `assets/...` file.
+- [ ] Download WAV and Download MP3 each give one playable file.
+- [ ] The Network tab shows requests to the local server only.
+- [ ] `node tests/smoke-synth.test.mjs` synthesizes a short text (needs the assets).
 
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| “Failed to fetch” on model | Model file missing or wrong name | Confirm exact filename in `assets/models/` |
-| WASM load error | Incorrect `wasmPaths` | Match paths to actual files |
-| No sound | Audio autoplay policy | Ensure Play is triggered by a user gesture |
-| Slow first load | Large model download | Expected; later loads use cache |
-| MP3 encode fails | lamejs not loaded | Confirm `assets/vendor/lame.min.js` exists |
+| "Offline assets missing" in the status line | A model or WASM file was not downloaded | Run `populate-assets` again |
+| `populate-assets` reports a SHA-256 mismatch | Truncated or tampered download | Delete the named file and re-run |
+| `populate-assets` gets 404 from the release | Private repo and no sign-in | `gh auth login`, then re-run |
+| WASM load error in the page | Server sends the wrong MIME type | Use `TalkForge.bat` / `serve.sh`, or send `application/wasm` |
+| No sound | Browser autoplay policy | Start playback from a click |
+| MP3 fails | `assets/vendor/lame.min.js` missing | Restore it from git |
 
-## Optional enhancements
+## Notes
 
-- Add a service worker to pre-cache all assets for true offline use.
-- Host only the models you need to reduce storage.
-- Use a reverse proxy to rewrite any residual absolute URLs if the library hard-codes them.
-- For multi-speaker models, the page already exposes speaker IDs 0–119; extend the dropdown if required.
-
-## Version notes
-
-- Page written against `@realtimex/piper-tts-web@1.1.1` and `lamejs@1.2.1`.
-- Model files from the rhasspy/piper-voices catalog (MIT license).
-- All inference and encoding remain client-side; no server-side TTS is required.
-
-Once the assets are in place, the page is fully intranet-ready.
+- Voices come from the rhasspy/piper-voices catalogue (MIT licence); see each model card for details.
+- All inference and encoding run locally; no server-side TTS is involved.
