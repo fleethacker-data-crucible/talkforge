@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/brand/emblem-transparent.png" width="280" alt="TalkForge fleet emblem: a speaking trumpet and forge anvil with flowing sound ribbons, in navy, brass and ivory">
+</p>
+
 # TalkForge
 
 > client-side neural text-to-speech (Piper, ONNX Runtime Web/WASM) with offline local assets.
