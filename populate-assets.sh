@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # populate-assets.sh
 # Downloads assets listed in assets-manifest.json and verifies each SHA-256.
-# Prefers the GitHub Release for entries with preferRelease=true, then the upstream url.
+# Downloads from the GitHub Release only (offline policy). The upstream url in the manifest (CDN or
+# Hugging Face) is used ONLY when TALKFORGE_ALLOW_UPSTREAM=1 (still SHA-256 verified).
 # A file that does not match its sha256 is never kept; exit code is 1 if anything failed.
 #
 # Usage:
@@ -114,10 +115,11 @@ process() {
     fi
     return
   fi
-  local urls=()
+  local urls=() problems_hint=""
   if [[ "${prefer}" == "1" ]]; then urls+=("${RELEASE_BASE}/${name}"); fi
-  urls+=("${url}")
+  if [[ "${TALKFORGE_ALLOW_UPSTREAM:-}" == "1" ]]; then urls+=("${url}"); else problems_hint="upstream download is off (offline policy); set TALKFORGE_ALLOW_UPSTREAM=1 to use ${url}"; fi
   local part="${full_dest}.part" problems="" u actual
+  [[ "${#urls[@]}" -eq 0 ]] && problems+="${problems_hint}; "
   for u in "${urls[@]}"; do
     echo "  [get]  ${name} <- ${u}"
     if ! (fetch "${u}" "${part}") 2>/dev/null; then
@@ -134,6 +136,7 @@ process() {
     problems+="SHA-256 MISMATCH from ${u} (expected ${expected}, got ${actual}); "
     rm -f "${part}"
   done
+  [[ -n "${problems_hint}" && "${problems}" != *"${problems_hint}"* ]] && problems+="${problems_hint}; "
   FAILURES+=("${name} : ${problems}")
 }
 

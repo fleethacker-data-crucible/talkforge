@@ -1,11 +1,13 @@
 ﻿# populate-assets.ps1 - downloads the files listed in assets-manifest.json and verifies SHA-256.
-# Prefers the GitHub Release for entries with preferRelease=true, then the upstream url.
+# Downloads from the GitHub Release only (offline policy). The upstream url in the manifest (CDN or
+# Hugging Face) is used ONLY when you pass -AllowUpstream or set TALKFORGE_ALLOW_UPSTREAM=1.
 # Every entry must carry a sha256; a file that does not match is never kept and the script
 # exits with code 1 and lists what failed.
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1
 #   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1 -AssetRoot .\assets
+#   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1 -AllowUpstream   (opt in to CDN/Hugging Face; still SHA-256 verified)
 #   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1 -Only 'models/en_US-lessac-high*','wasm/*','vendor/onnx/*.jsep.wasm'
 #
 # -Only takes wildcard patterns matched against the manifest "dest" (default: everything).
@@ -15,7 +17,8 @@
 param(
     [string]$AssetRoot = (Join-Path $PSScriptRoot 'assets'),
     [string]$Manifest = (Join-Path $PSScriptRoot 'assets-manifest.json'),
-    [string[]]$Only
+    [string[]]$Only,
+    [switch]$AllowUpstream
 )
 
 $ErrorActionPreference = 'Stop'
@@ -72,6 +75,8 @@ function Get-AssetHash([string]$Path, [string]$Dest) {
 # powershell -File passes -Only 'a','b' as one string, so also split on commas.
 if ($Only) { $Only = @($Only | ForEach-Object { $_ -split ',' } | Where-Object { $_ }) }
 
+if ($env:TALKFORGE_ALLOW_UPSTREAM -eq '1') { $AllowUpstream = $true }
+
 $RELEASE_BASE = ConvertTo-SeriesBase (Get-ReleaseBase)
 Write-Host "Using release base: $RELEASE_BASE"
 Write-Host "Reading manifest: $Manifest"
@@ -117,7 +122,8 @@ foreach ($e in $entries) {
         Dest        = $dest
         Expected    = $expected
         ReleaseUrl  = $releaseUrl
-        FallbackUrl = [string]$e.url
+        FallbackUrl = if ($AllowUpstream) { [string]$e.url } else { $null }
+        UpstreamUrl = [string]$e.url
     }
 }
 
@@ -135,7 +141,7 @@ if ($tasks.Count -gt 0) {
         $problems = @()
         $urls = @()
         if ($task.ReleaseUrl) { $urls += $task.ReleaseUrl }
-        $urls += $task.FallbackUrl
+        if ($task.FallbackUrl) { $urls += $task.FallbackUrl }
         foreach ($url in $urls) {
             $got = $false
             for ($i = 1; $i -le 3 -and -not $got; $i++) {
@@ -156,6 +162,7 @@ if ($tasks.Count -gt 0) {
             $problems += "SHA-256 MISMATCH from $url (expected $($task.Expected), got $actual)"
             Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
         }
+        if (-not $task.FallbackUrl) { $problems += "upstream download is off (offline policy); re-run with -AllowUpstream to use $($task.UpstreamUrl)" }
         return [pscustomobject]@{ Name = $task.Name; Ok = $false; Message = ($problems -join '; ') }
     }
 
