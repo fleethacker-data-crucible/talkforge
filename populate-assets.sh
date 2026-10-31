@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # populate-assets.sh
 # Downloads assets listed in assets-manifest.json and verifies each SHA-256.
-# Prefers the GitHub Release for entries with preferRelease=true, then the upstream url.
+# Downloads from the GitHub Release only (offline policy). The upstream url in the manifest (CDN or
+# Hugging Face) is used ONLY when TALKFORGE_ALLOW_UPSTREAM=1 (still SHA-256 verified).
 # If the GitHub CLI is installed and signed in (gh auth status), release assets are fetched with
 # `gh release download` first, so a private repo works. TALKFORGE_GH=auto (default) | on | off.
 # on = require gh and never fall back; off = never use gh. Hash mismatch from gh is final (fail closed).
@@ -153,9 +154,9 @@ process() {
     fi
     return
   fi
-  local urls=()
+  local urls=() problems_hint=""
   if [[ "${prefer}" == "1" ]]; then urls+=("${RELEASE_BASE}/${name}"); fi
-  urls+=("${url}")
+  if [[ "${TALKFORGE_ALLOW_UPSTREAM:-}" == "1" ]]; then urls+=("${url}"); else problems_hint="upstream download is off (offline policy); set TALKFORGE_ALLOW_UPSTREAM=1 to use ${url}"; fi
   local part="${full_dest}.part" problems="" u actual
   if [[ "${prefer}" == "1" ]]; then
     if ! gh_enabled && [[ "${GH_MODE}" == "on" ]]; then return; fi # required but unavailable: already reported
@@ -176,6 +177,7 @@ process() {
       if [[ "${GH_MODE}" == "on" ]]; then FAILURES+=("${name} : ${problems}(TALKFORGE_GH=on: no fallback)"); return; fi
     fi
   fi
+  [[ "${#urls[@]}" -eq 0 ]] && problems+="${problems_hint}; "
   for u in "${urls[@]}"; do
     echo "  [get]  ${name} <- ${u}"
     if ! (fetch "${u}" "${part}") 2>/dev/null; then
@@ -192,6 +194,7 @@ process() {
     problems+="SHA-256 MISMATCH from ${u} (expected ${expected}, got ${actual}); "
     rm -f "${part}"
   done
+  [[ -n "${problems_hint}" && "${problems}" != *"${problems_hint}"* ]] && problems+="${problems_hint}; "
   FAILURES+=("${name} : ${problems}")
 }
 

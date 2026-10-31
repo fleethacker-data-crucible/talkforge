@@ -5,12 +5,9 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import vm from 'node:vm';
-import { DEFAULT_ASSETS_DIR, DEFAULT_VOICE, MissingAssetsError, loadVoice } from './node-engine.mjs';
-import {
-  DEFAULT_SENTENCE_GAP, buildTiming, joinPcm, parseScript, parseWav, pcmStats,
-  speedToLengthScale, splitScene, wavFromPcm
-} from './synth-lib.mjs';
+import { DEFAULT_ASSETS_DIR, DEFAULT_VOICE, MissingAssetsError } from './node-engine.mjs';
+import { createSynthesizer } from './synth-core.mjs';
+import { DEFAULT_SENTENCE_GAP, buildTiming, parseScript } from './synth-lib.mjs';
 
 export const USAGE = `Usage: node tools/synth-cli.mjs <script> [options]
 
@@ -68,31 +65,6 @@ export function parseArgs(argv) {
   return opts;
 }
 
-async function loadLame(assetsDir) {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const file = join(assetsDir, 'vendor', 'lame.min.js');
-  let code;
-  try { code = await readFile(file, 'utf8'); }
-  catch { code = await readFile(join(here, '..', 'assets', 'vendor', 'lame.min.js'), 'utf8'); }
-  const ctx = {}; ctx.self = ctx; ctx.window = ctx;
-  vm.createContext(ctx);
-  vm.runInContext(code, ctx);
-  return ctx.lamejs;
-}
-
-function encodeMp3(lamejs, pcm, sampleRate) {
-  const samples = new Int16Array(pcm.buffer.slice(pcm.byteOffset, pcm.byteOffset + pcm.length));
-  const enc = new lamejs.Mp3Encoder(1, sampleRate, 128);
-  const out = [];
-  for (let i = 0; i < samples.length; i += 1152) {
-    const b = enc.encodeBuffer(samples.subarray(i, i + 1152));
-    if (b.length) out.push(Buffer.from(b));
-  }
-  const end = enc.flush();
-  if (end.length) out.push(Buffer.from(end));
-  return Buffer.concat(out);
-}
-
 // Programmatic entry point (the CLI is a thin wrapper). Returns the timing object.
 //   options: { scriptPath, out, voice, speed, speaker, format, sceneGap, sentenceGap, assets, log }
 export async function synthesizeScript(options) {
@@ -104,43 +76,27 @@ export async function synthesizeScript(options) {
     defaults: { voice: defaultVoice, speed: o.speed, speaker: o.speaker, sceneGap: o.sceneGap }
   });
   const outDir = resolve(o.out);
-  const lamejs = o.format === 'mp3' ? await loadLame(resolve(o.assets)) : null;
+  const synth = createSynthesizer({ assets: o.assets, defaultVoice, sentenceGap: o.sentenceGap, log: o.log });
 
   // Load every voice up front so a missing file fails before any audio is written.
-  const engines = new Map();
-  for (const v of new Set(scenes.map((s) => s.voice ?? defaultVoice))) {
-    o.log(`Loading voice ${v} ...`);
-    engines.set(v, await loadVoice(v, o.assets));
-  }
+  for (const v of new Set(scenes.map((s) => s.voice ?? defaultVoice))) await synth.load(v);
   await mkdir(outDir, { recursive: true });
 
   const entries = [];
   for (const sc of scenes) {
     const voice = sc.voice ?? defaultVoice;
-    const { engine, sampleRate } = engines.get(voice);
     const t0 = Date.now();
-    const lengthScale = speedToLengthScale(sc.speed);
-    const sentences = splitScene(sc.text);
-    const parts = [];
-    for (const sentence of sentences) {
-      const wav = Buffer.from(await (await engine.synthesize(sentence, sc.speaker, lengthScale)).arrayBuffer());
-      const parsed = parseWav(wav);
-      if (parsed.sampleRate !== sampleRate) throw new Error(`Scene "${sc.id}": unexpected sample rate ${parsed.sampleRate}`);
-      parts.push(parsed.pcm);
-    }
-    const pcm = joinPcm(parts, sampleRate, o.sentenceGap);
-    const stats = pcmStats(pcm);
-    if (stats.samples === 0 || stats.peak < 0.01) throw new Error(`Scene "${sc.id}" came out silent (peak ${stats.peak.toFixed(4)})`);
+    let r;
+    try { r = await synth.render({ text: sc.text, voice, speed: sc.speed, speaker: sc.speaker, format: o.format }); }
+    catch (e) { throw new Error(`Scene "${sc.id}": ${e.message}`); }
     const file = `${sc.id}.${o.format}`;
-    const bytes = o.format === 'mp3' ? encodeMp3(lamejs, pcm, sampleRate) : wavFromPcm(pcm, sampleRate);
-    await writeFile(join(outDir, file), bytes);
-    const seconds = stats.samples / sampleRate;
-    entries.push({ ...sc, voice, file, seconds });
-    o.log(`${sc.id.padEnd(14)} ${seconds.toFixed(2)} s  ${sentences.length} sentence(s)  ${((Date.now() - t0) / 1000).toFixed(1)} s to synthesize`);
+    await writeFile(join(outDir, file), r.bytes);
+    entries.push({ ...sc, voice, file, seconds: r.seconds });
+    o.log(`${sc.id.padEnd(14)} ${r.seconds.toFixed(2)} s  ${r.sentences} sentence(s)  ${((Date.now() - t0) / 1000).toFixed(1)} s to synthesize`);
   }
   const timing = buildTiming(entries, {
     script: basename(o.scriptPath), voice: defaultVoice, format: o.format,
-    sampleRate: engines.get(entries[0].voice).sampleRate, sentenceGap: o.sentenceGap
+    sampleRate: (await synth.load(entries[0].voice)).sampleRate, sentenceGap: o.sentenceGap
   });
   await writeFile(join(outDir, 'timing.json'), JSON.stringify(timing, null, 2) + '\n');
   return timing;

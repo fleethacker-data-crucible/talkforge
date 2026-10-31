@@ -1,5 +1,6 @@
 ﻿# populate-assets.ps1 - downloads the files listed in assets-manifest.json and verifies SHA-256.
-# Prefers the GitHub Release for entries with preferRelease=true, then the upstream url.
+# Downloads from the GitHub Release only (offline policy). The upstream url in the manifest (CDN or
+# Hugging Face) is used ONLY when you pass -AllowUpstream or set TALKFORGE_ALLOW_UPSTREAM=1.
 # If the GitHub CLI is installed and signed in (gh auth status), release assets are fetched with
 # `gh release download` first, so a private repo works. -UseGh auto (default) | on | off, or env TALKFORGE_GH.
 # on = require gh and never fall back; off = never use gh. A hash mismatch from gh is final (fail closed).
@@ -9,6 +10,7 @@
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1
 #   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1 -AssetRoot .\assets
+#   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1 -AllowUpstream   (opt in to CDN/Hugging Face; still SHA-256 verified)
 #   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1 -Only 'models/en_US-lessac-high*','wasm/*','vendor/onnx/*.jsep.wasm'
 #
 # -Only takes wildcard patterns matched against the manifest "dest" (default: everything).
@@ -19,6 +21,7 @@ param(
     [string]$AssetRoot = (Join-Path $PSScriptRoot 'assets'),
     [string]$Manifest = (Join-Path $PSScriptRoot 'assets-manifest.json'),
     [string[]]$Only,
+    [switch]$AllowUpstream,
     [ValidateSet('auto', 'on', 'off')][string]$UseGh = 'auto'
 )
 
@@ -80,6 +83,8 @@ if ($env:TALKFORGE_GH) {
     if (@('auto', 'on', 'off') -notcontains $env:TALKFORGE_GH) { throw "TALKFORGE_GH must be auto, on or off (got $env:TALKFORGE_GH)" }
     $UseGh = $env:TALKFORGE_GH
 }
+
+if ($env:TALKFORGE_ALLOW_UPSTREAM -eq '1') { $AllowUpstream = $true }
 
 $RELEASE_BASE = ConvertTo-SeriesBase (Get-ReleaseBase)
 Write-Host "Using release base: $RELEASE_BASE"
@@ -147,7 +152,8 @@ foreach ($e in $entries) {
         GhCmd       = $ghCmd
         GhRequired  = ($UseGh -eq 'on')
         ReleaseUrl  = $releaseUrl
-        FallbackUrl = [string]$e.url
+        FallbackUrl = if ($AllowUpstream) { [string]$e.url } else { $null }
+        UpstreamUrl = [string]$e.url
     }
 }
 
@@ -191,7 +197,7 @@ if ($tasks.Count -gt 0) {
         }
         $urls = @()
         if ($task.ReleaseUrl) { $urls += $task.ReleaseUrl }
-        $urls += $task.FallbackUrl
+        if ($task.FallbackUrl) { $urls += $task.FallbackUrl }
         foreach ($url in $urls) {
             $got = $false
             for ($i = 1; $i -le 3 -and -not $got; $i++) {
@@ -212,6 +218,7 @@ if ($tasks.Count -gt 0) {
             $problems += "SHA-256 MISMATCH from $url (expected $($task.Expected), got $actual)"
             Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
         }
+        if (-not $task.FallbackUrl) { $problems += "upstream download is off (offline policy); re-run with -AllowUpstream to use $($task.UpstreamUrl)" }
         return [pscustomobject]@{ Name = $task.Name; Ok = $false; Message = ($problems -join '; ') }
     }
 

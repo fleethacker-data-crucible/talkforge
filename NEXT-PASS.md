@@ -12,7 +12,7 @@ The repo has no sanitize items: no personal data, internal docs or secrets were 
   - `vendor/onnx/ort-wasm-simd-threaded.jsep.wasm`, which `ort.min.mjs` requests
 
   Either commit them (LFS or a release zip built off-workstation) or document that the release zip is the only supported install.
-- [ ] **HIGH: the workstation downloads assets.** `populate-assets.ps1:56,119` and `populate-assets.sh:71-73` pull from GitHub Releases, falling back to cdn.jsdelivr.net and huggingface.co. `README.md:19` tells Windows users to run it on the workstation. Make it a build-machine step only.
+- [ ] **HIGH: the workstation downloads assets.** (CDN and Hugging Face fallbacks are now opt-in only: -AllowUpstream / TALKFORGE_ALLOW_UPSTREAM=1.) `populate-assets.ps1:56,119` and `populate-assets.sh:71-73` pull from GitHub Releases, falling back to cdn.jsdelivr.net and huggingface.co. `README.md:19` tells Windows users to run it on the workstation. Make it a build-machine step only.
 - [ ] **HIGH: downloads aren't integrity-checked.** `assets-manifest.json` has no sha256 or sizes, and the "already exists → skip" logic (ps1:48/68/96, sh:65/85) keeps truncated or tampered files forever. Add hashes, verify them after download, and re-fetch on mismatch.
 
 ## 2. Windows server (`serve-windows.ps1`)
