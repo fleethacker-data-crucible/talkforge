@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { DEFAULT_ASSETS_DIR, DEFAULT_VOICE, MissingAssetsError } from './node-engine.mjs';
 import { createSynthesizer } from './synth-core.mjs';
 import { DEFAULT_PORT, checkToken, startServer } from './talkforge-server.mjs';
+import { DEFAULT_LAZARETTE_ITEM, TokenError, resolveToken } from './token-provider.mjs';
 import { formatVoices, listVoices, voicesDocument } from './voices.mjs';
 
 export const USAGE = `Usage:
@@ -29,6 +30,8 @@ voices list: one line per voice (a * marks the default); --json prints {schema: 
 serve options:
   --port <n>           default ${DEFAULT_PORT}; 127.0.0.1 only, there is no host option
   --token-file <file>  first line is the bearer token (or set env TALKFORGE_TOKEN); 16+ characters
+  --token-from <src>   env | file | lazarette (default: file if --token-file is given, else env)
+  --lazarette-item <n> vault item for --token-from lazarette (default ${DEFAULT_LAZARETTE_ITEM}, or env TALKFORGE_LAZARETTE_ITEM)
   --idle-timeout <min> stop after this many minutes without a speech request (default 0 = never)
   --voice, --assets    as above
 
@@ -43,7 +46,7 @@ export function parseArgs(argv) {
   if (!cmd || cmd === '-h' || cmd === '--help') return { cmd: 'help' };
   if (!['speak', 'serve', 'voices'].includes(cmd)) throw new UsageError(`Unknown command: ${cmd}`);
   const o = { cmd, text: [], out: undefined, voice: undefined, speed: 1, speaker: 0, format: undefined, port: DEFAULT_PORT,
-    json: false, installed: false, tokenFile: undefined, idleTimeout: 0, assets: process.env.TALKFORGE_ASSETS || DEFAULT_ASSETS_DIR };
+    json: false, installed: false, tokenFile: undefined, tokenFrom: undefined, lazaretteItem: undefined, idleTimeout: 0, assets: process.env.TALKFORGE_ASSETS || DEFAULT_ASSETS_DIR };
   const val = (i, n) => { if (i + 1 >= rest.length) throw new UsageError(`${n} needs a value`); return rest[i + 1]; };
   const num = (v, n) => { const x = Number(v); if (!Number.isFinite(x)) throw new UsageError(`${n} must be a number, got "${v}"`); return x; };
   for (let i = 0; i < rest.length; i++) {
@@ -60,12 +63,15 @@ export function parseArgs(argv) {
       case '--format': o.format = val(i, a).toLowerCase(); i++; break;
       case '--port': o.port = num(val(i, a), a); i++; break;
       case '--token-file': o.tokenFile = val(i, a); i++; break;
+      case '--token-from': o.tokenFrom = val(i, a).toLowerCase(); i++; break;
+      case '--lazarette-item': o.lazaretteItem = val(i, a); i++; break;
       case '--idle-timeout': o.idleTimeout = num(val(i, a), a); i++; break;
       case '--assets': o.assets = val(i, a); i++; break;
       default: throw new UsageError(`Unknown option: ${a}`);
     }
   }
   if (o.format && !['wav', 'mp3'].includes(o.format)) throw new UsageError(`--format must be wav or mp3, got "${o.format}"`);
+  if (o.tokenFrom && !['env', 'file', 'lazarette'].includes(o.tokenFrom)) throw new UsageError(`--token-from must be env, file or lazarette, got "${o.tokenFrom}"`);
   if (o.idleTimeout < 0) throw new UsageError('--idle-timeout must be 0 or more');
   if (cmd === 'voices' && !(o.text.length === 1 && o.text[0] === 'list')) throw new UsageError('Use: talkforge voices list');
   if (cmd !== 'voices' && (o.json || o.installed)) throw new UsageError('--json and --installed belong to: talkforge voices list');
@@ -124,9 +130,9 @@ async function speak(o) {
 }
 
 async function serve(o) {
-  let token = process.env.TALKFORGE_TOKEN;
-  if (o.tokenFile) token = (await readFile(resolve(o.tokenFile), 'utf8')).split(/\r?\n/)[0];
-  token = checkToken(token);
+  const { token: raw, source } = await resolveToken({ from: o.tokenFrom, tokenFile: o.tokenFile, item: o.lazaretteItem });
+  const token = checkToken(raw);
+  console.error(`API token read from ${source}`); // the source only, never the value
   const synth = createSynthesizer({ assets: o.assets, defaultVoice: o.voice ?? DEFAULT_VOICE, log: (m) => console.error(m) });
   await synth.load(o.voice ?? DEFAULT_VOICE); // fail fast, with the missing-file list, before listening
   let stopNow;
@@ -152,6 +158,7 @@ export async function main(argv) {
     return 0;
   } catch (e) {
     if (e instanceof UsageError) { console.error(`Error: ${e.message}\n\n${USAGE}`); return 64; }
+    if (e instanceof TokenError) { console.error(`Error: ${e.message}`); return 1; }
     if (e instanceof MissingAssetsError) { console.error(`Error: ${e.message}`); return 2; }
     console.error(`Error: ${e.message}`);
     return 1;
