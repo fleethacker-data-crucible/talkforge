@@ -68,6 +68,10 @@ Every asset in `assets-manifest.json` has a `sha256`. `populate-assets` download
 
 If the page cannot find a file it needs, it lists exactly which `assets/...` files are missing and what to run.
 
+### Private release (GitHub CLI)
+
+The repo's releases are private, so an anonymous download of the release returns 404. If the GitHub CLI is installed and signed in (`gh auth status` succeeds), `populate-assets` fetches each release asset with `gh release download` first, with no setup. The result is still checked against the manifest SHA-256; a mismatch from gh is final (nothing kept, no other source tried). If gh is missing, signed out, or the download fails, it falls back to the anonymous release URL as before. Control it with `TALKFORGE_GH=auto|on|off` (or `-UseGh` in PowerShell): `on` requires gh and never falls back; `off` never uses gh. The repo and tag come from the release base (`assets/release-base.txt`); `TALKFORGE_GH_REPO` and `TALKFORGE_GH_TAG` override them.
+
 ## Features
 
 - Multi-speaker models (LibriTTS-R, VCTK) with searchable speaker list

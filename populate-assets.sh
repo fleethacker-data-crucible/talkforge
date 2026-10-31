@@ -3,6 +3,9 @@
 # Downloads assets listed in assets-manifest.json and verifies each SHA-256.
 # Downloads from the GitHub Release only (offline policy). The upstream url in the manifest (CDN or
 # Hugging Face) is used ONLY when TALKFORGE_ALLOW_UPSTREAM=1 (still SHA-256 verified).
+# If the GitHub CLI is installed and signed in (gh auth status), release assets are fetched with
+# `gh release download` first, so a private repo works. TALKFORGE_GH=auto (default) | on | off.
+# on = require gh and never fall back; off = never use gh. Hash mismatch from gh is final (fail closed).
 # A file that does not match its sha256 is never kept; exit code is 1 if anything failed.
 #
 # Usage:
@@ -95,6 +98,42 @@ fetch() {
 
 FAILURES=()
 
+# --- authenticated release download through the GitHub CLI -------------------------------------
+GH_MODE="${TALKFORGE_GH:-auto}"
+case "${GH_MODE}" in auto|on|off) ;; *) echo "Error: TALKFORGE_GH must be auto, on or off (got ${GH_MODE})" >&2; exit 1 ;; esac
+GH_STATE=""; GH_REPO=""; GH_TAG=""
+read -ra GH_CMD <<< "${TALKFORGE_GH_BIN:-gh}" # TALKFORGE_GH_BIN: test hook to swap in a fake gh
+
+# True when gh can be used for this run (decided once). Sets GH_REPO / GH_TAG.
+gh_enabled() {
+  if [[ -z "${GH_STATE}" ]]; then
+    GH_STATE=no
+    if [[ "${GH_MODE}" != "off" ]]; then
+      if [[ "${RELEASE_BASE}" =~ ^https://github\.com/([^/]+/[^/]+)/releases/download/([^/]+)$ ]]; then
+        GH_REPO="${BASH_REMATCH[1]}"; GH_TAG="${BASH_REMATCH[2]}"
+      fi
+      GH_REPO="${TALKFORGE_GH_REPO:-${GH_REPO}}"; GH_TAG="${TALKFORGE_GH_TAG:-${GH_TAG}}"
+      if [[ -n "${GH_REPO}" && -n "${GH_TAG}" ]] && command -v "${GH_CMD[0]}" >/dev/null 2>&1 && "${GH_CMD[@]}" auth status >/dev/null 2>&1; then
+        GH_STATE=yes
+        echo "Using gh for release downloads: ${GH_REPO} ${GH_TAG}"
+      elif [[ "${GH_MODE}" == "on" ]]; then
+        FAILURES+=("gh is required (TALKFORGE_GH=on) but is not installed, not signed in (run: gh auth login), or the release repo/tag is unknown")
+      fi
+    fi
+  fi
+  [[ "${GH_STATE}" == "yes" ]]
+}
+
+# gh_fetch <asset name> <output file>: download one release asset by exact name.
+gh_fetch() {
+  local name="$1" out="$2" tmp
+  tmp="$(mktemp -d)" || return 1
+  if "${GH_CMD[@]}" release download "${GH_TAG}" --repo "${GH_REPO}" --pattern "${name}" --dir "${tmp}" --clobber >/dev/null 2>&1 && [[ -f "${tmp}/${name}" ]]; then
+    mv -f "${tmp}/${name}" "${out}"; rm -rf "${tmp}"; return 0
+  fi
+  rm -rf "${tmp}"; return 1
+}
+
 # $1 dest (relative)  $2 upstream url  $3 prefer release (1/0)  $4 expected sha256
 process() {
   local dest="$1" url="$2" prefer="$3" expected="$4"
@@ -119,6 +158,25 @@ process() {
   if [[ "${prefer}" == "1" ]]; then urls+=("${RELEASE_BASE}/${name}"); fi
   if [[ "${TALKFORGE_ALLOW_UPSTREAM:-}" == "1" ]]; then urls+=("${url}"); else problems_hint="upstream download is off (offline policy); set TALKFORGE_ALLOW_UPSTREAM=1 to use ${url}"; fi
   local part="${full_dest}.part" problems="" u actual
+  if [[ "${prefer}" == "1" ]]; then
+    if ! gh_enabled && [[ "${GH_MODE}" == "on" ]]; then return; fi # required but unavailable: already reported
+    if gh_enabled; then
+      echo "  [gh]   ${name} <- ${GH_REPO} ${GH_TAG}"
+      if gh_fetch "${name}" "${part}"; then
+        actual="$(sha256_of "${part}" "${dest}")"
+        if [[ "${actual}" == "${expected}" ]]; then
+          mv -f "${part}" "${full_dest}"
+          echo "  [ok]   ${name} verified <- gh release ${GH_TAG}"
+          return
+        fi
+        rm -f "${part}"
+        FAILURES+=("${name} : SHA-256 MISMATCH from gh release ${GH_TAG} (expected ${expected}, got ${actual}); not trying other sources. The release and assets-manifest.json disagree.")
+        return
+      fi
+      problems+="gh release download failed for ${name}; "
+      if [[ "${GH_MODE}" == "on" ]]; then FAILURES+=("${name} : ${problems}(TALKFORGE_GH=on: no fallback)"); return; fi
+    fi
+  fi
   [[ "${#urls[@]}" -eq 0 ]] && problems+="${problems_hint}; "
   for u in "${urls[@]}"; do
     echo "  [get]  ${name} <- ${u}"
