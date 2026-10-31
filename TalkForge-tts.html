@@ -408,7 +408,6 @@
     const progressBar = progressEl.querySelector('div');
     const dropZone = document.getElementById('dropZone');
 
-    let currentSession = null;
     let currentVoiceId = null;
     let isPlaying = false;
     let isPaused = false;
@@ -419,11 +418,6 @@
     let audioQueue = [];          // { text, blob, url } for generated chunks
     let generatedBlobs = [];      // all successful audio blobs for the current text
     let generationController = null;
-
-    const MULTI_SPEAKER_MODELS = new Set([
-      'en_US-libritts_r-medium',
-      'en_US-libritts-high'
-    ]);
 
     function setStatus(msg, active = false) {
       statusEl.textContent = msg;
@@ -443,17 +437,8 @@
     }
 
     // Import pure helpers (also tested under Node)
-    const { splitSentences, filterSpeakers, requiredAssetPaths, formatMissingAssets, speedToLengthScale, concatWavBuffers } = await import(`${ASSET_BASE}/vendor/tts-utils.js`);
+    const { splitSentences, filterSpeakers, requiredAssetPaths, formatMissingAssets, speedToLengthScale, concatWavBuffers, loadOnce } = await import(`${ASSET_BASE}/vendor/tts-utils.js`);
 
-    // Probe whether local phonemize data is reachable
-    async function checkLocalWasm() {
-      try {
-        const resp = await fetch(`${ASSET_BASE}/wasm/piper_phonemize.data`, { method: 'HEAD' });
-        return resp.ok;
-      } catch {
-        return false;
-      }
-    }
 
     const voiceSearch = document.getElementById('voiceSearch');
     let allSpeakers = [];
@@ -571,8 +556,14 @@
     let engine = null;
     let engineModel = null;
 
-    async function ensureEngine(modelId) {
-      if (engine && engineModel === modelId) return engine;
+    // One load per model at a time: populateVoices and preSynthesizeFirst can both ask at startup.
+    const engineLoads = new Map();
+    function ensureEngine(modelId) {
+      if (engine && engineModel === modelId) return Promise.resolve(engine);
+      return loadOnce(engineLoads, modelId, () => loadEngine(modelId));
+    }
+
+    async function loadEngine(modelId) {
       setStatus('Loading model with multi-speaker engine…');
       showProgress(0);
       const modelUrl = `${ASSET_BASE}/models/${modelId}.onnx`;
@@ -593,12 +584,13 @@
         }
         if (missing.length) throw new Error(formatMissingAssets(missing));
         const { PiperEngine } = await import(`${ASSET_BASE}/vendor/piper-engine.js`);
-        engine = await PiperEngine.load(modelUrl, configUrl, wasmBase, phonemePaths);
+        const eng = await PiperEngine.load(modelUrl, configUrl, wasmBase, phonemePaths);
+        engine = eng;
         engineModel = modelId;
-        appendDebug(`PiperEngine loaded for ${modelId}. Speakers: ${engine.voiceConfig.num_speakers || 1}`, 'status');
+        appendDebug(`PiperEngine loaded for ${modelId}. Speakers: ${eng.voiceConfig.num_speakers || 1}`, 'status');
         hideProgress();
         setStatus('Model ready');
-        return engine;
+        return eng;
       } catch (e) {
         hideProgress();
         setStatus('Engine load failed: ' + e.message);
@@ -1020,14 +1012,12 @@
     }
 
     modelEl.addEventListener('change', () => {
-      currentSession = null;
       currentVoiceId = null;
       populateVoices();
       setStatus('Model changed.');
       preSynthesizeFirst();
     });
     voiceEl.addEventListener('change', () => {
-      currentSession = null;
       currentVoiceId = null;
       setStatus('Speaker changed to ' + voiceEl.value);
       preSynthesizeFirst();
