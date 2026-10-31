@@ -8,10 +8,12 @@ import { readFileSync } from 'node:fs';
 import { DEFAULT_ASSETS_DIR, DEFAULT_VOICE, MissingAssetsError } from './node-engine.mjs';
 import { createSynthesizer } from './synth-core.mjs';
 import { DEFAULT_PORT, checkToken, startServer } from './talkforge-server.mjs';
+import { formatVoices, listVoices, voicesDocument } from './voices.mjs';
 
 export const USAGE = `Usage:
   talkforge speak [text...] [options]    text from the arguments, or stdin when none (or "-")
   talkforge serve [options]              loopback-only speech endpoint
+  talkforge voices list [--json] [--installed] [--assets <dir>]   which voices exist and which are installed
 
 speak options:
   --out <file|->       output file, or - for stdout (default: stdout when piped; required on a terminal)
@@ -20,6 +22,9 @@ speak options:
   --speaker <n>        speaker id for multi-speaker voices
   --format <wav|mp3>   default wav (or taken from the --out extension)
   --assets <dir>       assets folder (default <repo>/assets, or env TALKFORGE_ASSETS)
+
+voices list: one line per voice (a * marks the default); --json prints {schema: "talkforge.voices/1", default, assets, voices: [...]};
+  --installed hides voices whose model file is missing. speak and serve check --voice and --speaker against this list first.
 
 serve options:
   --port <n>           default ${DEFAULT_PORT}; 127.0.0.1 only, there is no host option
@@ -36,14 +41,16 @@ class UsageError extends Error {}
 export function parseArgs(argv) {
   const [cmd, ...rest] = argv;
   if (!cmd || cmd === '-h' || cmd === '--help') return { cmd: 'help' };
-  if (!['speak', 'serve'].includes(cmd)) throw new UsageError(`Unknown command: ${cmd}`);
+  if (!['speak', 'serve', 'voices'].includes(cmd)) throw new UsageError(`Unknown command: ${cmd}`);
   const o = { cmd, text: [], out: undefined, voice: undefined, speed: 1, speaker: 0, format: undefined, port: DEFAULT_PORT,
-    tokenFile: undefined, idleTimeout: 0, assets: process.env.TALKFORGE_ASSETS || DEFAULT_ASSETS_DIR };
+    json: false, installed: false, tokenFile: undefined, idleTimeout: 0, assets: process.env.TALKFORGE_ASSETS || DEFAULT_ASSETS_DIR };
   const val = (i, n) => { if (i + 1 >= rest.length) throw new UsageError(`${n} needs a value`); return rest[i + 1]; };
   const num = (v, n) => { const x = Number(v); if (!Number.isFinite(x)) throw new UsageError(`${n} must be a number, got "${v}"`); return x; };
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     if (a === '-') { o.text.push('-'); continue; }
+    if (a === '--json') { o.json = true; continue; }
+    if (a === '--installed') { o.installed = true; continue; }
     if (!a.startsWith('--')) { o.text.push(a); continue; }
     switch (a) {
       case '--out': o.out = val(i, a); i++; break;
@@ -60,6 +67,8 @@ export function parseArgs(argv) {
   }
   if (o.format && !['wav', 'mp3'].includes(o.format)) throw new UsageError(`--format must be wav or mp3, got "${o.format}"`);
   if (o.idleTimeout < 0) throw new UsageError('--idle-timeout must be 0 or more');
+  if (cmd === 'voices' && !(o.text.length === 1 && o.text[0] === 'list')) throw new UsageError('Use: talkforge voices list');
+  if (cmd !== 'voices' && (o.json || o.installed)) throw new UsageError('--json and --installed belong to: talkforge voices list');
   if (cmd === 'serve' && o.text.length) throw new UsageError('serve takes no text');
   if (cmd === 'serve' && !(Number.isInteger(o.port) && o.port >= 0 && o.port < 65536)) throw new UsageError('--port must be 0 to 65535');
   return o;
@@ -77,6 +86,25 @@ async function readStdin() {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+// Fail early, with the list, for a voice or speaker that cannot exist. A known voice whose model file is
+// missing passes here and is reported by the engine as missing assets (exit 2).
+async function checkVoice(o, voice) {
+  const voices = await listVoices(o.assets);
+  if (!voices.length) return; // nothing to check against (no catalogue or configs): the engine reports missing assets
+  const v = voices.find((x) => x.id === voice);
+  if (!v) {
+    throw new UsageError(`Unknown voice "${voice}". Known voices: ${voices.map((x) => x.id).join(', ') || '(none)'}. See: talkforge voices list`);
+  }
+  if (!Number.isInteger(o.speaker) || o.speaker < 0 || o.speaker >= v.speakers) {
+    throw new UsageError(`Voice ${voice} has ${v.speakers} speaker(s); --speaker must be 0 to ${v.speakers - 1}`);
+  }
+}
+
+async function voices(o) {
+  const doc = await voicesDocument(o.assets, { installedOnly: o.installed });
+  console.log(o.json ? JSON.stringify(doc, null, 2) : formatVoices(doc));
+}
+
 async function speak(o) {
   let text = o.text.join(' ');
   if (!text || text === '-') text = await readStdin();
@@ -87,6 +115,7 @@ async function speak(o) {
     out = '-';
   }
   const format = o.format || (/\.mp3$/i.test(out) ? 'mp3' : 'wav');
+  await checkVoice(o, o.voice ?? DEFAULT_VOICE);
   const synth = createSynthesizer({ assets: o.assets, defaultVoice: o.voice ?? DEFAULT_VOICE });
   const r = await synth.render({ text, voice: o.voice ?? DEFAULT_VOICE, speed: o.speed, speaker: o.speaker, format });
   if (out === '-') process.stdout.write(r.bytes);
@@ -119,7 +148,7 @@ export async function main(argv) {
   catch (e) { console.error(`Error: ${e.message}\n\n${USAGE}`); return 64; }
   if (o.cmd === 'help') { console.log(USAGE); return 0; }
   try {
-    await (o.cmd === 'speak' ? speak(o) : serve(o));
+    await ({ speak, serve, voices }[o.cmd])(o);
     return 0;
   } catch (e) {
     if (e instanceof UsageError) { console.error(`Error: ${e.message}\n\n${USAGE}`); return 64; }

@@ -149,6 +149,8 @@ TALKFORGE_TOKEN=<16+ chars> talkforge serve                    # endpoint on 127
 
 `speak` options: `--out <file|->`, `--voice` (default en_US-lessac-high), `--speed` (1 = normal), `--speaker`, `--format wav|mp3`, `--assets <dir>`. Exit codes: 0 ok, 1 error, 2 assets missing, 64 bad usage.
 
+**Voices.** `talkforge voices list [--json] [--installed]` shows every voice the local assets know about (catalogue `assets/models.json` plus the `models/*.onnx.json` configs): id, installed or missing (the `.onnx` model file), speaker count, sample rate, language, and a `*` on the default. `--json` prints `{"schema": "talkforge.voices/1", "default", "assets", "voices": [...]}`. `speak --voice <id>` and `--speaker <n>` are checked against that list first: an unknown voice or a speaker out of range exits 64 and names the valid ones; a known voice whose model is not downloaded exits 2 (assets missing). The endpoint has the same list at `GET /v1/voices` (token required).
+
 **Endpoint.** `serve` listens on **127.0.0.1 only** (there is no host option; default port 25009, the last port of TalkForge's block) and refuses to start without a token of 16+ characters, taken from env `TALKFORGE_TOKEN` or the first line of `--token-file`. The token is never printed or stored. Every request needs `Authorization: Bearer <token>`; requests with a non-loopback Host or any Origin header are refused with 403, bodies over 64 KB with 413.
 
 ```bash
