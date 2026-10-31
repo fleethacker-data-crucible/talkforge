@@ -4,6 +4,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 import { DEFAULT_ASSETS_DIR, DEFAULT_VOICE, MissingAssetsError } from './node-engine.mjs';
 import { createSynthesizer } from './synth-core.mjs';
 import { DEFAULT_PORT, checkToken, startServer } from './talkforge-server.mjs';
@@ -23,6 +24,7 @@ speak options:
 serve options:
   --port <n>           default ${DEFAULT_PORT}; 127.0.0.1 only, there is no host option
   --token-file <file>  first line is the bearer token (or set env TALKFORGE_TOKEN); 16+ characters
+  --idle-timeout <min> stop after this many minutes without a speech request (default 0 = never)
   --voice, --assets    as above
 
 Endpoint: POST /v1/audio/speech with "Authorization: Bearer <token>" and JSON
@@ -36,7 +38,7 @@ export function parseArgs(argv) {
   if (!cmd || cmd === '-h' || cmd === '--help') return { cmd: 'help' };
   if (!['speak', 'serve'].includes(cmd)) throw new UsageError(`Unknown command: ${cmd}`);
   const o = { cmd, text: [], out: undefined, voice: undefined, speed: 1, speaker: 0, format: undefined, port: DEFAULT_PORT,
-    tokenFile: undefined, assets: process.env.TALKFORGE_ASSETS || DEFAULT_ASSETS_DIR };
+    tokenFile: undefined, idleTimeout: 0, assets: process.env.TALKFORGE_ASSETS || DEFAULT_ASSETS_DIR };
   const val = (i, n) => { if (i + 1 >= rest.length) throw new UsageError(`${n} needs a value`); return rest[i + 1]; };
   const num = (v, n) => { const x = Number(v); if (!Number.isFinite(x)) throw new UsageError(`${n} must be a number, got "${v}"`); return x; };
   for (let i = 0; i < rest.length; i++) {
@@ -51,14 +53,22 @@ export function parseArgs(argv) {
       case '--format': o.format = val(i, a).toLowerCase(); i++; break;
       case '--port': o.port = num(val(i, a), a); i++; break;
       case '--token-file': o.tokenFile = val(i, a); i++; break;
+      case '--idle-timeout': o.idleTimeout = num(val(i, a), a); i++; break;
       case '--assets': o.assets = val(i, a); i++; break;
       default: throw new UsageError(`Unknown option: ${a}`);
     }
   }
   if (o.format && !['wav', 'mp3'].includes(o.format)) throw new UsageError(`--format must be wav or mp3, got "${o.format}"`);
+  if (o.idleTimeout < 0) throw new UsageError('--idle-timeout must be 0 or more');
   if (cmd === 'serve' && o.text.length) throw new UsageError('serve takes no text');
   if (cmd === 'serve' && !(Number.isInteger(o.port) && o.port >= 0 && o.port < 65536)) throw new UsageError('--port must be 0 to 65535');
   return o;
+}
+
+// VERSION file at the repo root (kept equal to PAGE_VERSION in the page; tests/version.test.mjs checks).
+export function readVersion() {
+  try { return readFileSync(new URL('../VERSION', import.meta.url), 'utf8').trim() || '0.0.0'; }
+  catch { return '0.0.0'; }
 }
 
 async function readStdin() {
@@ -90,9 +100,16 @@ async function serve(o) {
   token = checkToken(token);
   const synth = createSynthesizer({ assets: o.assets, defaultVoice: o.voice ?? DEFAULT_VOICE, log: (m) => console.error(m) });
   await synth.load(o.voice ?? DEFAULT_VOICE); // fail fast, with the missing-file list, before listening
-  const s = await startServer({ synth, token, port: o.port, log: (m) => console.error(m) });
+  let stopNow;
+  const stopped = new Promise((r) => { stopNow = r; });
+  const s = await startServer({
+    synth, token, port: o.port, log: (m) => console.error(m), version: readVersion(),
+    scriptPath: fileURLToPath(import.meta.url), idleTimeoutMs: Math.round(o.idleTimeout * 60000), onStop: stopNow
+  });
   console.log(`TalkForge speech endpoint: http://127.0.0.1:${s.port}/v1/audio/speech (loopback only, bearer token required)`);
-  await new Promise((r) => { process.once('SIGINT', r); process.once('SIGTERM', r); });
+  process.once('SIGINT', () => stopNow('signal'));
+  process.once('SIGTERM', () => stopNow('signal'));
+  await stopped;
   await s.close();
 }
 
