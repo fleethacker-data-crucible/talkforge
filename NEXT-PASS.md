@@ -44,5 +44,5 @@ The repo has no sanitize items: no personal data, internal docs or secrets were 
 ## 5. Cleanup
 
 - [ ] **Add a `.gitignore`.** There isn't one, so downloaded `.onnx`/`.data` files and `serve-windows.log` can be committed by accident.
-- [ ] **Remove unused files:** `assets/vendor/dist/voices_static-D_OtJDHM.js` (147 KB), `onnx/ort.wasm.min.mjs` and `onnx/ort-wasm-simd-threaded.mjs`. The manifest and `release.yml:66` also ship the unused non-jsep `ort-wasm-simd-threaded.wasm`.
+- [ ] **Remove unused files** (`voices_static` is already gone): `onnx/ort.wasm.min.mjs` and `onnx/ort-wasm-simd-threaded.mjs`. The manifest and `release.yml:66` also ship the unused non-jsep `ort-wasm-simd-threaded.wasm`.
 - [ ] **Remove unused code in `TalkForge-tts.html`:** `checkLocalWasm` (437), `MULTI_SPEAKER_MODELS` (411) and `currentSession` (399).
