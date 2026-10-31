@@ -35,6 +35,36 @@ Describe 'Loopback-only bind' -Skip:($script:Servers.Count -eq 0) {
     }
 }
 
+Describe 'serve-windows.ps1 path guard' {
+    BeforeAll {
+        # Load only Test-PathUnderRoot from the script (the script itself starts a server).
+        $path = Join-Path $script:RepoRootRun 'serve-windows.ps1'
+        $tokens = $null; $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+        $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Test-PathUnderRoot' }, $true)
+        . ([scriptblock]::Create($fn.Extent.Text))
+        $script:R = 'C:\TalkForge'
+    }
+    It 'accepts the root and files inside it' {
+        Test-PathUnderRoot $script:R 'C:\TalkForge' | Should -BeTrue
+        Test-PathUnderRoot $script:R 'C:\TalkForge\TalkForge-tts.html' | Should -BeTrue
+        Test-PathUnderRoot $script:R 'C:\talkforge\assets\models\x.onnx' | Should -BeTrue
+        Test-PathUnderRoot 'C:\TalkForge\' 'C:\TalkForge\a.js' | Should -BeTrue
+    }
+    It 'rejects a sibling folder that shares the prefix' {
+        Test-PathUnderRoot $script:R 'C:\TalkForge-evil\secret.txt' | Should -BeFalse
+        Test-PathUnderRoot $script:R 'C:\TalkForge2' | Should -BeFalse
+    }
+    It 'rejects the parent and unrelated paths' {
+        Test-PathUnderRoot $script:R 'C:\' | Should -BeFalse
+        Test-PathUnderRoot $script:R 'C:\Windows\win.ini' | Should -BeFalse
+    }
+    It 'does not use a bare StartsWith($Root) in the request loop' {
+        $text = [IO.File]::ReadAllText((Join-Path $script:RepoRootRun 'serve-windows.ps1'))
+        $text | Should -Not -Match 'StartsWith\(\$Root'
+    }
+}
+
 BeforeAll {
     $script:RepoRootRun = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 }
