@@ -18,8 +18,8 @@ The repo has no sanitize items: no personal data, internal docs or secrets were 
 ## 2. Windows server (`serve-windows.ps1`)
 
 - [ ] **HIGH (confirm on a non-admin account): `HttpListener` may need admin.** `serve-windows.ps1:70-74` uses it with `http://127.0.0.1:$port/`, and HTTP.sys usually refuses that prefix for non-admin users without a URL ACL. TechStack line 10 calls for `TcpListener`, which line 55 already uses for the port probe. Switch the server to it.
-- [ ] **MEDIUM: the path-traversal guard can be bypassed.** Lines 133-137 check `$full.StartsWith($Root)` with no trailing separator, so a sibling folder like `talkforge-secrets` passes. The path is also decoded twice (`LocalPath`, then `UnescapeDataString`), so `/..%255Ctalkforge-other%255Cfile` gets through. Decode once, compare against `$Root + '\'` case-insensitively, and refuse `.git/` and the log file.
-- [ ] **MEDIUM: assets are refetched for every sentence.** Line 88 sends `Cache-Control: no-store`, and `assets/vendor/piper-engine.js:45` builds a new phonemizer per sentence. Together they re-fetch about 18 MB `.data` + `.wasm` for each chunk and leak instances. Cache the phonemizer, and allow caching of static assets.
+- [x] **MEDIUM: the path-traversal guard can be bypassed.** Fixed: the root check uses a trailing separator, the path is decoded once, and `.git`, `.env*`, `*.log` and `:` (alternate streams, drive letters) are refused (Pester tests).
+- [~] **MEDIUM: assets are refetched for every sentence.** Line 88 sends `Cache-Control: no-store`, and `assets/vendor/piper-engine.js:45` builds a new phonemizer per sentence. Together they re-fetch about 18 MB `.data` + `.wasm` for each chunk and leak instances. Cache the phonemizer, and allow caching of static assets. Partly done: models, `.wasm` and `.data` now send `private, max-age=300`; the page, scripts and configs stay `no-store`. Still open: `piper-engine.js` builds a new phonemizer per sentence.
 
 ## 3. Bugs
 
