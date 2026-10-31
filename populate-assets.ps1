@@ -1,5 +1,8 @@
 ﻿# populate-assets.ps1 - downloads the files listed in assets-manifest.json and verifies SHA-256.
 # Prefers the GitHub Release for entries with preferRelease=true, then the upstream url.
+# If the GitHub CLI is installed and signed in (gh auth status), release assets are fetched with
+# `gh release download` first, so a private repo works. -UseGh auto (default) | on | off, or env TALKFORGE_GH.
+# on = require gh and never fall back; off = never use gh. A hash mismatch from gh is final (fail closed).
 # Every entry must carry a sha256; a file that does not match is never kept and the script
 # exits with code 1 and lists what failed.
 #
@@ -15,7 +18,8 @@
 param(
     [string]$AssetRoot = (Join-Path $PSScriptRoot 'assets'),
     [string]$Manifest = (Join-Path $PSScriptRoot 'assets-manifest.json'),
-    [string[]]$Only
+    [string[]]$Only,
+    [ValidateSet('auto', 'on', 'off')][string]$UseGh = 'auto'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -72,6 +76,11 @@ function Get-AssetHash([string]$Path, [string]$Dest) {
 # powershell -File passes -Only 'a','b' as one string, so also split on commas.
 if ($Only) { $Only = @($Only | ForEach-Object { $_ -split ',' } | Where-Object { $_ }) }
 
+if ($env:TALKFORGE_GH) {
+    if (@('auto', 'on', 'off') -notcontains $env:TALKFORGE_GH) { throw "TALKFORGE_GH must be auto, on or off (got $env:TALKFORGE_GH)" }
+    $UseGh = $env:TALKFORGE_GH
+}
+
 $RELEASE_BASE = ConvertTo-SeriesBase (Get-ReleaseBase)
 Write-Host "Using release base: $RELEASE_BASE"
 Write-Host "Reading manifest: $Manifest"
@@ -81,6 +90,23 @@ $entries = @($data.assets)
 Write-Host "Manifest entries: $($entries.Count)"
 
 $failures = New-Object System.Collections.ArrayList
+
+# Authenticated release download through the GitHub CLI. TALKFORGE_GH_BIN is a test hook (a fake gh).
+$ghCmd = @(([string]$(if ($env:TALKFORGE_GH_BIN) { $env:TALKFORGE_GH_BIN } else { 'gh' })) -split ' ' | Where-Object { $_ })
+$ghRepo = $null; $ghTag = $null
+if ($RELEASE_BASE -match '^https://github\.com/([^/]+/[^/]+)/releases/download/([^/]+)$') { $ghRepo = $Matches[1]; $ghTag = $Matches[2] }
+if ($env:TALKFORGE_GH_REPO) { $ghRepo = $env:TALKFORGE_GH_REPO }
+if ($env:TALKFORGE_GH_TAG) { $ghTag = $env:TALKFORGE_GH_TAG }
+$ghUsable = $false
+if ($UseGh -ne 'off' -and $ghRepo -and $ghTag -and (Get-Command $ghCmd[0] -ErrorAction SilentlyContinue)) {
+    $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $null = & $ghCmd[0] @($ghCmd | Select-Object -Skip 1) auth status 2>&1; $ghUsable = ($LASTEXITCODE -eq 0) } catch { $ghUsable = $false }
+    $ErrorActionPreference = $prev
+}
+if ($ghUsable) { Write-Host "Using gh for release downloads: $ghRepo $ghTag" }
+elseif ($UseGh -eq 'on') {
+    [void]$failures.Add('gh is required (TALKFORGE_GH=on / -UseGh on) but is not installed, not signed in (run: gh auth login), or the release repo/tag is unknown')
+}
 if ($Only -and -not ($entries | Where-Object { $d = [string]$_.dest; $Only | Where-Object { $d -like $_ } })) {
     [void]$failures.Add("-Only matched no manifest entry: $($Only -join ', ')")
 }
@@ -116,11 +142,16 @@ foreach ($e in $entries) {
         Name        = $name
         Dest        = $dest
         Expected    = $expected
+        GhRepo      = if ($ghUsable) { $ghRepo } else { $null }
+        GhTag       = $ghTag
+        GhCmd       = $ghCmd
+        GhRequired  = ($UseGh -eq 'on')
         ReleaseUrl  = $releaseUrl
         FallbackUrl = [string]$e.url
     }
 }
 
+if ($UseGh -eq 'on' -and -not $ghUsable) { $tasks = @() }
 if ($tasks.Count -gt 0) {
     Write-Host "Downloading $($tasks.Count) file(s) with up to 8 parallel connections..."
 
@@ -133,6 +164,31 @@ if ($tasks.Count -gt 0) {
         . ([scriptblock]::Create($hashFnText))
         $part = $task.Dest + '.part'
         $problems = @()
+        if ($task.GhRepo) {
+            $tmp = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+            $ghOk = $false
+            $prev = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+            try {
+                $null = & $task.GhCmd[0] @($task.GhCmd | Select-Object -Skip 1) release download $task.GhTag --repo $task.GhRepo --pattern $task.Name --dir $tmp --clobber 2>&1
+                $ghOk = (($LASTEXITCODE -eq 0) -and (Test-Path -LiteralPath (Join-Path $tmp $task.Name)))
+            } catch { $ghOk = $false }
+            $ErrorActionPreference = $prev
+            if ($ghOk) {
+                Move-Item -LiteralPath (Join-Path $tmp $task.Name) -Destination $part -Force
+                Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+                $actual = Get-AssetHash $part $task.Dest
+                if ($actual -eq $task.Expected) {
+                    Move-Item -LiteralPath $part -Destination $task.Dest -Force
+                    return [pscustomobject]@{ Name = $task.Name; Ok = $true; Message = "verified  $($task.Name)  <-  gh release $($task.GhTag)" }
+                }
+                Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
+                return [pscustomobject]@{ Name = $task.Name; Ok = $false; Message = "SHA-256 MISMATCH from gh release $($task.GhTag) (expected $($task.Expected), got $actual); not trying other sources. The release and assets-manifest.json disagree." }
+            }
+            Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
+            $problems += "gh release download failed for $($task.Name)"
+            if ($task.GhRequired) { return [pscustomobject]@{ Name = $task.Name; Ok = $false; Message = ($problems -join '; ') + ' (gh required: no fallback)' } }
+        }
         $urls = @()
         if ($task.ReleaseUrl) { $urls += $task.ReleaseUrl }
         $urls += $task.FallbackUrl
