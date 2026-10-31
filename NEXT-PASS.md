@@ -6,7 +6,7 @@ The repo has no sanitize items: no personal data, internal docs or secrets were 
 
 ## 1. A fresh clone can't run offline (TechStack: "bundle all deps")
 
-- [x] **HIGH: runtime assets aren't in the repo.** They are listed in `assets-manifest.json:3-112` but missing: Resolved by documenting the supported install: release assets via `populate-assets` (README "Supported install").
+- [x] **HIGH: runtime assets aren't in the repo.** They are listed in `assets-manifest.json:3-112` but missing: Resolved by documenting the supported install: release assets via `populate-assets` (README "Supported install"). `talkforge assets status` is the preflight that checks them.
   - all 9 `models/*.onnx`
   - `wasm/piper_phonemize.data` (about 18 MB)
   - `vendor/onnx/ort-wasm-simd-threaded.jsep.wasm`, which `ort.min.mjs` requests

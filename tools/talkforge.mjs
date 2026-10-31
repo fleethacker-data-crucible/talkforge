@@ -10,12 +10,15 @@ import { createSynthesizer } from './synth-core.mjs';
 import { DEFAULT_PORT, checkToken, startServer } from './talkforge-server.mjs';
 import { DEFAULT_LAZARETTE_ITEM, TokenError, resolveToken } from './token-provider.mjs';
 import { formatVoices, listVoices, voicesDocument } from './voices.mjs';
+import { DEFAULT_MANIFEST, assetsStatus, formatAssetsStatus } from './assets-status.mjs';
 
 export const USAGE = `Usage:
   talkforge speak [text...] [options]    text from the arguments, or stdin when none (or "-")
   talkforge serve [options]              loopback-only speech endpoint
   talkforge voices list [--json] [--installed] [--assets <dir>]   which voices exist and which are installed
   talkforge version [--json]             the TalkForge version (from the VERSION file)
+  talkforge assets status [--voice <id>] [--json] [--no-hash] [--manifest <file>] [--assets <dir>]
+                                         preflight: are the files a voice needs present and verified? (never downloads)
 
 speak options:
   --out <file|->       output file, or - for stdout (default: stdout when piped; required on a terminal)
@@ -25,6 +28,10 @@ speak options:
   --format <wav|mp3>   default wav (or taken from the --out extension)
   --assets <dir>       assets folder (default <repo>/assets, or env TALKFORGE_ASSETS)
   --json               with --out <file>: print {schema: "talkforge.speak/1", out, format, voice, seconds, sampleRate, bytes} on stdout
+
+assets status: lists the files the voice needs with PRESENT/OK/MISSING/MISMATCH (SHA-256 against assets-manifest.json; --no-hash only checks they exist)
+  and, when something is missing, the exact populate-assets command to fetch it. Exit 0 when ready, 2 when not, 64 for an unknown voice.
+  --json prints {schema: "talkforge.assets/1", voice, assets, ok, files: [{dest, state, expected, actual, bytes}], fetch}.
 
 voices list: one line per voice (a * marks the default); --json prints {schema: "talkforge.voices/1", default, assets, voices: [...]};
   --installed hides voices whose model file is missing. speak and serve check --voice and --speaker against this list first.
@@ -46,9 +53,9 @@ class UsageError extends Error {}
 export function parseArgs(argv) {
   const [cmd, ...rest] = argv;
   if (!cmd || cmd === '-h' || cmd === '--help') return { cmd: 'help' };
-  if (!['speak', 'serve', 'voices', 'version'].includes(cmd)) throw new UsageError(`Unknown command: ${cmd}`);
+  if (!['speak', 'serve', 'voices', 'version', 'assets'].includes(cmd)) throw new UsageError(`Unknown command: ${cmd}`);
   const o = { cmd, text: [], out: undefined, voice: undefined, speed: 1, speaker: 0, format: undefined, port: DEFAULT_PORT,
-    json: false, installed: false, tokenFile: undefined, tokenFrom: undefined, lazaretteItem: undefined, idleTimeout: 0, assets: process.env.TALKFORGE_ASSETS || DEFAULT_ASSETS_DIR };
+    json: false, installed: false, noHash: false, manifest: DEFAULT_MANIFEST, tokenFile: undefined, tokenFrom: undefined, lazaretteItem: undefined, idleTimeout: 0, assets: process.env.TALKFORGE_ASSETS || DEFAULT_ASSETS_DIR };
   const val = (i, n) => { if (i + 1 >= rest.length) throw new UsageError(`${n} needs a value`); return rest[i + 1]; };
   const num = (v, n) => { const x = Number(v); if (!Number.isFinite(x)) throw new UsageError(`${n} must be a number, got "${v}"`); return x; };
   for (let i = 0; i < rest.length; i++) {
@@ -56,6 +63,7 @@ export function parseArgs(argv) {
     if (a === '-') { o.text.push('-'); continue; }
     if (a === '--json') { o.json = true; continue; }
     if (a === '--installed') { o.installed = true; continue; }
+    if (a === '--no-hash') { o.noHash = true; continue; }
     if (!a.startsWith('--')) { o.text.push(a); continue; }
     switch (a) {
       case '--out': o.out = val(i, a); i++; break;
@@ -69,6 +77,7 @@ export function parseArgs(argv) {
       case '--lazarette-item': o.lazaretteItem = val(i, a); i++; break;
       case '--idle-timeout': o.idleTimeout = num(val(i, a), a); i++; break;
       case '--assets': o.assets = val(i, a); i++; break;
+      case '--manifest': o.manifest = val(i, a); i++; break;
       default: throw new UsageError(`Unknown option: ${a}`);
     }
   }
@@ -77,7 +86,9 @@ export function parseArgs(argv) {
   if (o.idleTimeout < 0) throw new UsageError('--idle-timeout must be 0 or more');
   if (cmd === 'voices' && !(o.text.length === 1 && o.text[0] === 'list')) throw new UsageError('Use: talkforge voices list');
   if (o.installed && cmd !== 'voices') throw new UsageError('--installed belongs to: talkforge voices list');
-  if (o.json && !['voices', 'speak', 'version'].includes(cmd)) throw new UsageError('--json is for: voices list, speak, version');
+  if (cmd === 'assets' && !(o.text.length === 1 && o.text[0] === 'status')) throw new UsageError('Use: talkforge assets status');
+  if (o.noHash && cmd !== 'assets') throw new UsageError('--no-hash belongs to: talkforge assets status');
+  if (o.json && !['voices', 'speak', 'version', 'assets'].includes(cmd)) throw new UsageError('--json is for: voices list, speak, version, assets status');
   if (cmd === 'version' && o.text.length) throw new UsageError('version takes no arguments');
   if (cmd === 'serve' && o.text.length) throw new UsageError('serve takes no text');
   if (cmd === 'serve' && !(Number.isInteger(o.port) && o.port >= 0 && o.port < 65536)) throw new UsageError('--port must be 0 to 65535');
@@ -138,6 +149,15 @@ async function speak(o) {
   }
 }
 
+// Exit 0 when every file is present and verified, 2 (assets missing) otherwise, so a render stage can gate on it.
+async function assets(o) {
+  let doc;
+  try { doc = await assetsStatus({ assetsDir: o.assets, manifestPath: resolve(o.manifest), voice: o.voice ?? DEFAULT_VOICE, hash: !o.noHash }); }
+  catch (e) { if (e.code === 'UNKNOWN_VOICE') throw new UsageError(e.message); throw e; }
+  console.log(o.json ? JSON.stringify(doc, null, 2) : formatAssetsStatus(doc));
+  if (!doc.ok) process.exitCode = 2;
+}
+
 async function version(o) {
   const v = readVersion();
   console.log(o.json ? JSON.stringify({ schema: 'talkforge.version/1', version: v, node: process.versions.node }) : v);
@@ -168,7 +188,8 @@ export async function main(argv) {
   catch (e) { console.error(`Error: ${e.message}\n\n${USAGE}`); return 64; }
   if (o.cmd === 'help') { console.log(USAGE); return 0; }
   try {
-    await ({ speak, serve, voices, version }[o.cmd])(o);
+    await ({ speak, serve, voices, version, assets }[o.cmd])(o);
+    if (process.exitCode) return process.exitCode;
     return 0;
   } catch (e) {
     if (e instanceof UsageError) { console.error(`Error: ${e.message}\n\n${USAGE}`); return 64; }
