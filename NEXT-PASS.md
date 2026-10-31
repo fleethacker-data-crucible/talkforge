@@ -34,7 +34,7 @@ The repo has no sanitize items: no personal data, internal docs or secrets were 
 
 ## 4. Conformance and docs
 
-- [ ] **Launcher:** `serve.bat:8` runs the ps1 without `-STA`, and the name isn't `TalkForge.bat` / `Start-TalkForge.ps1` (edge-ops `CONVENTIONS.md:21-22`).
+- [x] **Launcher:** renamed to `TalkForge.bat` / `Start-TalkForge.ps1`, run with `-STA`; `serve.bat` and `serve-windows.ps1` remain as shims. (A `TalkForge.lnk` per the edge-ops launcher convention still needs generating on Windows.)
 - [x] `serve.sh` uses Python `http.server` with no Host check. That's fine as a dev-only convenience; say so in the README. Its header (line 6) says port 8080, but the code (line 11) uses 25000.
 - [x] `README.md:23` claims a CDN fallback that doesn't exist. `README.md:70` says the onnx files are in `wasm/onnx/`; they are in `assets/vendor/onnx/`.
 - [x] `LOCAL-ASSET-PLAYBOOK.md:16,19,74-81,92` and `assets/MANIFEST.md:10-20,54` describe files that don't exist (`piper-tts-web.js`, `assets/wasm/onnx/`, `onnxruntime-web/`, `artifacts/`). The playbook also recommends `python3 -m http.server`.

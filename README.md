@@ -23,10 +23,10 @@ cd talkforge
 git clone https://github.com/fleethacker-data-crucible/talkforge.git
 cd talkforge
 populate-assets.bat           # optional: downloads large models
-serve.bat                     # starts the local server and opens the page
+TalkForge.bat                # starts the local server and opens the page (serve.bat still works)
 ```
 
-`serve.bat` uses port block **25000-25009** (edge-ops PORTS.md). Launching it while TalkForge is already running opens the running copy instead of starting another; an older running copy is asked to stop (`POST /__fleethacker/shutdown`) and replaced. `-Port <n>` uses exactly that port. `GET http://127.0.0.1:<port>/__fleethacker/id` reports the running tool, version (the page's `PAGE_VERSION`), pid and script path.
+`TalkForge.bat` (runs `Start-TalkForge.ps1`; the old `serve.bat` and `serve-windows.ps1` are kept as shims so existing shortcuts work) uses port block **25000-25009** (edge-ops PORTS.md). Launching it while TalkForge is already running opens the running copy instead of starting another; an older running copy is asked to stop (`POST /__fleethacker/shutdown`) and replaced. `-Port <n>` uses exactly that port. `GET http://127.0.0.1:<port>/__fleethacker/id` reports the running tool, version (the page's `PAGE_VERSION`), pid and script path.
 
 Open `TalkForge-tts.html` in a browser. The page loads everything from the local `assets/` folder and makes no CDN or other external requests. If a model or WASM file is missing it stops with an error instead of fetching it from the internet; run `populate-assets` to download the files from the pinned GitHub Release.
 
@@ -92,7 +92,7 @@ assets/
   wasm/            # phonemizer WASM (data + onnx/ come from Release)
   models/          # .onnx.json configs (models come from Release)
 populate-assets.sh / .ps1 / .bat
-serve.sh / serve-windows.ps1 / serve.bat
+serve.sh / Start-TalkForge.ps1 / TalkForge.bat   (serve-windows.ps1 and serve.bat are shims)
 tools/             # synth-cli.mjs (voiceover CLI), node-engine.mjs, synth-lib.mjs
 tests/
 .github/workflows/

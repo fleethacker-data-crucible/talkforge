@@ -1,4 +1,4 @@
-# Pester 5 smoke tests for the port block + self-detection in serve-windows.ps1.
+# Pester 5 smoke tests for the port block + self-detection in Start-TalkForge.ps1.
 # Run: Invoke-Pester -Path .\tests -Output Detailed   (Windows PowerShell 5.1; uses scratch port 18500, starts real servers).
 BeforeAll {
     $script:repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -12,11 +12,11 @@ BeforeAll {
     function New-TalkForgeCopy([string]$Version) {
         $dir = Join-Path ([IO.Path]::GetTempPath()) ('talkforge-smoke-' + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
-        Copy-Item (Join-Path $repo 'serve-windows.ps1'), (Join-Path $repo 'FleetPort.psm1'), (Join-Path $repo 'FleetPorts.psd1') $dir
+        Copy-Item (Join-Path $repo 'Start-TalkForge.ps1'), (Join-Path $repo 'FleetPort.psm1'), (Join-Path $repo 'FleetPorts.psd1') $dir
         if ([IO.Path]::DirectorySeparatorChar -ne '\') {
             # Off Windows the managed HttpListener binds 127.0.0.1 and localhost (::1) as separate sockets, so the probe's
             # Host: localhost request on 127.0.0.1 gets a 400. http.sys on Windows routes both prefixes on one port.
-            $f = Join-Path $dir 'serve-windows.ps1'
+            $f = Join-Path $dir 'Start-TalkForge.ps1'
             [IO.File]::WriteAllText($f, ([IO.File]::ReadAllText($f) -replace '(?m)^\$listener\.Prefixes\.Add\(\$prefix\)\r?\n', ''))
         }
         Set-Content -LiteralPath (Join-Path $dir 'TalkForge-tts.html') -Value ("<!doctype html><title>smoke</title><script>const PAGE_VERSION = '" + $Version + "';</script>") -Encoding Ascii
@@ -25,10 +25,10 @@ BeforeAll {
     function Start-TalkForge([string]$Dir) {
         $out = [IO.Path]::GetTempFileName(); $err = [IO.Path]::GetTempFileName()
         $p = Start-Process $hostExe -PassThru -NoNewWindow -RedirectStandardOutput $out -RedirectStandardError $err -ArgumentList @(
-            '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ('"' + (Join-Path $Dir 'serve-windows.ps1') + '"'), '-Port', "$port", '-NoBrowser')
+            '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ('"' + (Join-Path $Dir 'Start-TalkForge.ps1') + '"'), '-Port', "$port", '-NoBrowser')
         # Windows PowerShell 5.1: read .Handle now, or ExitCode reads as $null after exit (Start-Process -PassThru with -Redirect*).
         [void]$p.Handle
-        return @{ Process = $p; Out = $out; Err = $err; Script = (Join-Path $Dir 'serve-windows.ps1') }
+        return @{ Process = $p; Out = $out; Err = $err; Script = (Join-Path $Dir 'Start-TalkForge.ps1') }
     }
     function Wait-Id([int]$TimeoutMs = 15000) {
         $sw = [Diagnostics.Stopwatch]::StartNew()
@@ -51,7 +51,7 @@ BeforeAll {
 
 AfterAll { if ($current) { Remove-Item -LiteralPath $current -Recurse -Force -ErrorAction SilentlyContinue } }
 
-Describe 'serve-windows.ps1 port and self-detection' {
+Describe 'Start-TalkForge.ps1 port and self-detection' {
     It 'registry puts talkforge on 25000-25009, policy reuse' {
         $b = Get-FleetPortBlock -Tool 'talkforge' -RegistryPath (Join-Path $repo 'FleetPorts.psd1')
         $b.Start | Should -Be 25000

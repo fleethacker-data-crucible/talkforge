@@ -8,7 +8,7 @@ BeforeDiscovery {
         ForEach-Object { @{ Name = $_.FullName.Substring($script:RepoRoot.Length + 1); Path = $_.FullName } })
     # Server source files and the loopback bind expected. Fails only on +, *, 0.0.0.0 or a non-loopback bind.
     $script:Servers = @(
-        @{ File = 'serve-windows.ps1'; Pattern = '(IPAddress\]?::Loopback|IPAddress\.Loopback|http://127\.0\.0\.1:|http://localhost:|http://\[::1\]:)'; Skip = $null }
+        @{ File = 'Start-TalkForge.ps1'; Pattern = '(IPAddress\]?::Loopback|IPAddress\.Loopback|http://127\.0\.0\.1:|http://localhost:|http://\[::1\]:)'; Skip = $null }
     )
 }
 
@@ -35,10 +35,10 @@ Describe 'Loopback-only bind' -Skip:($script:Servers.Count -eq 0) {
     }
 }
 
-Describe 'serve-windows.ps1 path guard' {
+Describe 'Start-TalkForge.ps1 path guard' {
     BeforeAll {
         # Load only Test-PathUnderRoot from the script (the script itself starts a server).
-        $path = Join-Path $script:RepoRootRun 'serve-windows.ps1'
+        $path = Join-Path $script:RepoRootRun 'Start-TalkForge.ps1'
         $tokens = $null; $errors = $null
         $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
         $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Test-PathUnderRoot' }, $true)
@@ -60,14 +60,50 @@ Describe 'serve-windows.ps1 path guard' {
         Test-PathUnderRoot $script:R 'C:\Windows\win.ini' | Should -BeFalse
     }
     It 'does not use a bare StartsWith($Root) in the request loop' {
-        $text = [IO.File]::ReadAllText((Join-Path $script:RepoRootRun 'serve-windows.ps1'))
+        $text = [IO.File]::ReadAllText((Join-Path $script:RepoRootRun 'Start-TalkForge.ps1'))
         $text | Should -Not -Match 'StartsWith\(\$Root'
     }
 }
 
-Describe 'serve-windows.ps1 request path rules and caching' {
+Describe 'launcher names and compatibility shims' {
+    BeforeAll { $script:R = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path }
+    It 'has TalkForge.bat and Start-TalkForge.ps1, and keeps serve.bat and serve-windows.ps1 as shims' {
+        foreach ($f in 'TalkForge.bat', 'Start-TalkForge.ps1', 'serve.bat', 'serve-windows.ps1') {
+            Test-Path -LiteralPath (Join-Path $script:R $f) | Should -BeTrue -Because $f
+        }
+    }
+    It 'TalkForge.bat runs Start-TalkForge.ps1 in an STA host with no admin step' {
+        $t = [IO.File]::ReadAllText((Join-Path $script:R 'TalkForge.bat'))
+        $t | Should -Match '-STA'
+        $t | Should -Match 'Start-TalkForge\.ps1'
+        $t | Should -Match '%\*'
+        $t | Should -Not -Match '(?i)runas|Start-Process .*-Verb'
+    }
+    It 'serve.bat hands over to TalkForge.bat with the same arguments' {
+        $t = [IO.File]::ReadAllText((Join-Path $script:R 'serve.bat'))
+        $t | Should -Match 'TalkForge\.bat'
+        $t | Should -Match '%\*'
+    }
+    It 'serve-windows.ps1 forwards to Start-TalkForge.ps1 in its own STA process and keeps the old parameters' {
+        $path = Join-Path $script:R 'serve-windows.ps1'
+        $tokens = $null; $errors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+        $errors | Should -BeNullOrEmpty
+        $names = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
+        $names | Should -Be @('Port', 'Root', 'NoBrowser')
+        $text = [IO.File]::ReadAllText($path)
+        $text | Should -Match 'Start-TalkForge\.ps1'
+        $text | Should -Match "'-STA'"
+        $text | Should -Match 'exit \$LASTEXITCODE'
+    }
+    It 'does not leave the server logic in the shim' {
+        ([IO.File]::ReadAllText((Join-Path $script:R 'serve-windows.ps1')) | Measure-Object -Line).Lines | Should -BeLessThan 30
+    }
+}
+
+Describe 'Start-TalkForge.ps1 request path rules and caching' {
     BeforeAll {
-        $path = Join-Path $script:RepoRootRun 'serve-windows.ps1'
+        $path = Join-Path $script:RepoRootRun 'Start-TalkForge.ps1'
         $tokens = $null; $errors = $null
         $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
         foreach ($name in 'Test-RequestPathAllowed', 'Get-CacheControlFor') {
@@ -94,7 +130,7 @@ Describe 'serve-windows.ps1 request path rules and caching' {
         $uri = [uri]'http://127.0.0.1:25000/..%255Ctalkforge-other%255Cfile'
         $uri.LocalPath.TrimStart('/') | Should -Be '..%5Ctalkforge-other%5Cfile'
         $uri.LocalPath.Contains([string][char]92) | Should -BeFalse
-        $text = [IO.File]::ReadAllText((Join-Path $script:RepoRootRun 'serve-windows.ps1'))
+        $text = [IO.File]::ReadAllText((Join-Path $script:RepoRootRun 'Start-TalkForge.ps1'))
         $text | Should -Not -Match 'UnescapeDataString\(\$req\.Url\.LocalPath'
     }
     It 'caches only immutable binaries, never the page or scripts' {
