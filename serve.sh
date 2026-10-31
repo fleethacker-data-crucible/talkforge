@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # serve.sh — start a local static server for debugging the TalkForge-tts page
+# Dev-only convenience (Python http.server on 127.0.0.1, no Host check). On Windows use TalkForge.bat.
 #
 # Usage:
 #   chmod +x serve.sh
-#   ./serve.sh          # serves on http://127.0.0.1:8080 (or next free port)
+#   ./serve.sh          # serves on http://127.0.0.1:25000 (or next free port)
 #   ./serve.sh 9000     # custom starting port
 
 set -euo pipefail

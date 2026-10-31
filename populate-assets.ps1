@@ -41,11 +41,11 @@ function Get-ReleaseBase {
         if ($remote) {
             $path = $remote -replace '^(https://github.com/|git@github.com:)', '' -replace '\.git$', ''
             if ($path -match '^[^/]+/[^/]+$') {
-                return "https://github.com/$path/releases/download/v1.0.0"
+                return "https://github.com/$path/releases/download/v1.3.0"
             }
         }
     } catch {}
-    return 'https://github.com/fleethacker-data-crucible/talkforge/releases/download/v1.0.0'
+    return 'https://github.com/fleethacker-data-crucible/talkforge/releases/download/v1.3.0'
 }
 
 function ConvertTo-SeriesBase([string]$url) {

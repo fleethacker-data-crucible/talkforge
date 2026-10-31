@@ -47,11 +47,11 @@ detect_release_base() {
     local path
     path=$(echo "${remote_url}" | sed -E 's#^(https://github.com/|git@github.com:)##; s#\.git$##')
     if [[ "${path}" =~ ^[^/]+/[^/]+$ ]]; then
-      echo "https://github.com/${path}/releases/download/v1.0.0"
+      echo "https://github.com/${path}/releases/download/v1.3.0"
       return
     fi
   fi
-  echo "https://github.com/seakintruth/talkforge/releases/download/v1.0.0"
+  echo "https://github.com/fleethacker-data-crucible/talkforge/releases/download/v1.3.0"
 }
 
 to_series_base() {
