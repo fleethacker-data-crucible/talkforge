@@ -56,7 +56,9 @@ jobs:
               assets/models/*.onnx \
               assets/wasm/piper_phonemize.data \
               assets/wasm/piper_phonemize.wasm \
-              assets/vendor/onnx/*.wasm
+              assets/vendor/onnx/*.wasm \               assets/stt/models/whisper-tiny.en/*.json \               assets/stt/models/whisper-tiny.en/onnx/*.onnx
+
+
           fi
 
       - name: Attach release-base.txt stamp
