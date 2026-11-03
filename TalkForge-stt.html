@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TalkForge-stt - Client-Side Speech to Text</title>
+<link rel="icon" href="assets/vendor/ui-kit/assets/favicon-32.png">
+<link rel="stylesheet" href="assets/vendor/ui-kit/kit.css">
+<style>
+  .stt-wrap { max-width: 760px; margin: 0 auto; padding: 1rem; }
+  .stt-panel { border: 1px solid var(--border, #ccc); border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+  .stt-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0; }
+  #transcript { width: 100%; min-height: 180px; }
+  #status { min-height: 1.5em; }
+  .missing { border-color: #b00; }
+  button.recording { outline: 3px solid #b00; }
+</style>
+</head>
+<body>
+<main class="stt-wrap">
+  <header>
+    <p><img src="assets/brand/emblem-transparent.png" width="140" alt="TalkForge fleet emblem: a speaking trumpet and forge anvil with flowing sound ribbons"></p>
+    <h1>TalkForge Listen</h1>
+    <p>Client-side speech to text in the browser. Whisper tiny.en, local assets only, nothing uploaded. <span id="pageVersion"></span></p>
+    <p><a href="TalkForge-tts.html">TalkForge speech (text to speech)</a></p>
+  </header>
+
+  <section class="stt-panel" aria-labelledby="listen-heading">
+    <h2 id="listen-heading">Listen</h2>
+    <p id="status" role="status" aria-live="polite">Checking speech-to-text assets…</p>
+    <p id="micStatus">Microphone: closed</p>
+    <p id="modelStatus">Model: not loaded</p>
+    <div class="stt-row">
+      <button id="preloadBtn" type="button">Load model</button>
+      <button id="holdBtn" type="button" disabled>Hold to talk</button>
+      <button id="toggleBtn" type="button" disabled>Start recording</button>
+    </div>
+    <p>Hold to talk: press and hold, speak, release to transcribe. Toggle: click once to start, click again to stop and transcribe. The microphone is closed at all other times. There is no always-listening hail mode in v1.</p>
+    <div id="missingBox" class="stt-panel missing" hidden></div>
+  </section>
+
+  <section class="stt-panel" aria-labelledby="transcript-heading">
+    <h2 id="transcript-heading">Transcript</h2>
+    <label for="transcript">Transcribed text (edit it before you copy it)</label>
+    <textarea id="transcript" rows="10" placeholder="Your transcript will appear here."></textarea>
+    <div class="stt-row">
+      <button id="copyBtn" type="button">Copy transcript</button>
+      <button id="downloadBtn" type="button">Download transcript (.txt)</button>
+      <button id="clearBtn" type="button">Clear</button>
+    </div>
+    <p>Limits in v1: English only (whisper-tiny.en), one small model, energy voice-activity detection (not Silero), no global shortcut and no paste into other apps. Those Handy features need a native app and do not fit the fleet stack. The transcript stays in this page until you copy or download it.</p>
+  </section>
+
+  <footer>
+    <p>Local assets only. If a model file is missing the page stops with a list of missing files instead of fetching anything. See <a href="docs/STT.md">docs/STT.md</a>.</p>
+  </footer>
+</main>
+
+<script type="module">
+  const STT_PAGE_VERSION = '2.2.3';
+  document.getElementById('pageVersion').textContent = 'v' + STT_PAGE_VERSION;
+  const ASSET_BASE = './assets';
+  const statusEl = document.getElementById('status');
+  const micEl = document.getElementById('micStatus');
+  const modelEl = document.getElementById('modelStatus');
+  const missingBox = document.getElementById('missingBox');
+  const holdBtn = document.getElementById('holdBtn');
+  const toggleBtn = document.getElementById('toggleBtn');
+  const preloadBtn = document.getElementById('preloadBtn');
+  const transcriptEl = document.getElementById('transcript');
+  const setStatus = (t) => { statusEl.textContent = t; };
+
+  const { downsample, requiredSttAssetPaths, formatMissingSttAssets } = await import(ASSET_BASE + '/vendor/stt-utils.js');
+
+  // Asset check first, exactly like the TTS page: missing files are an error, never a download.
+  const missing = [];
+  for (const rel of requiredSttAssetPaths()) {
+    try {
+      const r = await fetch(ASSET_BASE + '/' + rel, { method: 'HEAD' });
+      if (!r.ok) missing.push(rel);
+    } catch (_) { missing.push(rel); }
+  }
+  if (missing.length) {
+    missingBox.hidden = false;
+    missingBox.textContent = formatMissingSttAssets(missing);
+    setStatus('Speech-to-text is disabled: assets are missing.');
+    preloadBtn.disabled = true;
+  } else {
+    setStatus('Assets present. Load the model, then hold to talk or toggle recording.');
+    holdBtn.disabled = false;
+    toggleBtn.disabled = false;
+  }
+
+  let worker = null;
+  let ready = null;
+  let nextId = 1;
+  const pending = {};
+  function loadWorker() {
+    if (ready) return ready;
+    ready = new Promise((resolve, reject) => {
+      worker = new Worker(ASSET_BASE + '/stt/stt-worker.js', { type: 'module' });
+      worker.onmessage = (e) => {
+        const m = e.data || {};
+        if (m.type === 'ready') { modelEl.textContent = 'Model: loaded (whisper-tiny.en)'; resolve(); }
+        else if (m.type === 'text' && pending[m.id]) { pending[m.id].resolve(m.text); delete pending[m.id]; }
+        else if (m.type === 'error') {
+          const err = new Error(m.message || 'Speech model error');
+          if (m.id && pending[m.id]) { pending[m.id].reject(err); delete pending[m.id]; }
+          else { ready = null; reject(err); }
+        }
+      };
+      worker.onerror = () => { ready = null; reject(new Error('The speech worker could not start.')); };
+      worker.postMessage({
+        type: 'load',
+        config: {
+          transformersUrl: ASSET_BASE + '/stt/transformers.min.js',
+          modelPath: ASSET_BASE + '/stt/models/',
+          wasmPaths: ASSET_BASE + '/vendor/onnx/'
+        }
+      });
+    });
+    return ready;
+  }
+  function transcribe(audio) {
+    return loadWorker().then(() => new Promise((resolve, reject) => {
+      const id = nextId++;
+      pending[id] = { resolve, reject };
+      worker.postMessage({ type: 'transcribe', id, audio }, [audio.buffer]);
+    }));
+  }
+
+  let stream = null;
+  let ctx = null;
+  let node = null;
+  let recording = false;
+  let chunks = [];
+  async function openMic() {
+    if (stream) return;
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    ctx = new AudioContext();
+    await ctx.audioWorklet.addModule(ASSET_BASE + '/stt/stt-worklet.js');
+    const src = ctx.createMediaStreamSource(stream);
+    node = new AudioWorkletNode(ctx, 'talkforge-capture');
+    node.port.onmessage = (e) => {
+      if (!recording) return;
+      chunks.push(downsample(e.data, ctx.sampleRate, 16000));
+    };
+    src.connect(node);
+    micEl.textContent = 'Microphone: open';
+  }
+  function closeMic() {
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    if (ctx) ctx.close();
+    stream = null; ctx = null; node = null;
+    micEl.textContent = 'Microphone: closed';
+  }
+  async function startRecording() {
+    if (recording) return;
+    recording = true;
+    chunks = [];
+    holdBtn.classList.add('recording');
+    toggleBtn.classList.add('recording');
+    toggleBtn.textContent = 'Stop recording';
+    try {
+      await openMic();
+      setStatus('Listening…');
+    } catch (e) {
+      recording = false;
+      holdBtn.classList.remove('recording');
+      toggleBtn.classList.remove('recording');
+      toggleBtn.textContent = 'Start recording';
+      setStatus('Microphone could not be opened: ' + (e && e.message ? e.message : e));
+      throw e;
+    }
+  }
+  async function stopRecording() {
+    if (!recording) return;
+    recording = false;
+    holdBtn.classList.remove('recording');
+    toggleBtn.classList.remove('recording');
+    toggleBtn.textContent = 'Start recording';
+    let total = 0;
+    chunks.forEach((c) => { total += c.length; });
+    const audio = new Float32Array(total);
+    let o = 0;
+    chunks.forEach((c) => { audio.set(c, o); o += c.length; });
+    chunks = [];
+    closeMic();
+    if (total < 16000 * 0.3) { setStatus('Too short to transcribe. Hold a little longer.'); return; }
+    setStatus('Transcribing…');
+    try {
+      const text = await transcribe(audio);
+      if (!text) { setStatus('No speech recognised.'); return; }
+      transcriptEl.value = transcriptEl.value ? transcriptEl.value.trim() + ' ' + text : text;
+      setStatus('Transcribed.');
+    } catch (e) {
+      setStatus('Transcription failed: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  preloadBtn.addEventListener('click', async () => {
+    setStatus('Loading model…');
+    try { await loadWorker(); setStatus('Model loaded. Hold to talk or toggle recording.'); }
+    catch (e) { setStatus('Model could not load: ' + (e && e.message ? e.message : e)); }
+  });
+  holdBtn.addEventListener('mousedown', () => { startRecording().catch(() => {}); });
+  holdBtn.addEventListener('mouseup', () => { stopRecording().catch(() => {}); });
+  holdBtn.addEventListener('mouseleave', () => { stopRecording().catch(() => {}); });
+  holdBtn.addEventListener('touchstart', (e) => { e.preventDefault(); startRecording().catch(() => {}); });
+  holdBtn.addEventListener('touchend', (e) => { e.preventDefault(); stopRecording().catch(() => {}); });
+  toggleBtn.addEventListener('click', () => {
+    if (recording) stopRecording().catch(() => {});
+    else startRecording().catch(() => {});
+  });
+  document.getElementById('copyBtn').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(transcriptEl.value); setStatus('Transcript copied.'); }
+    catch (e) { transcriptEl.select(); setStatus('Copy failed, text selected: ' + (e && e.message ? e.message : e)); }
+  });
+  document.getElementById('downloadBtn').addEventListener('click', () => {
+    const blob = new Blob([transcriptEl.value], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'talkforge-transcript.txt';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    setStatus('Transcript downloaded.');
+  });
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    transcriptEl.value = '';
+    setStatus('Transcript cleared.');
+  });
+</script>
+</body>
+</html>
