@@ -1,6 +1,6 @@
 // tests/token-provider.test.mjs - where `talkforge serve` gets its token: env/file (default) or the
 // Lazarette vault item. No live Lazarette: a fake PowerShell (a node script, TALKFORGE_POWERSHELL_BIN)
-// and, on Windows, a real powershell.exe running against a fake lib\Arc.ps1.
+// and, on Windows, a real powershell.exe running against fake lib\Lazarette.ps1 / lib\Arc.ps1.
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { spawn, spawnSync } from 'node:child_process';
@@ -92,9 +92,15 @@ await test('lazarette: the item name and the secret never appear on the command 
   assert.ok(!flat.includes('my-item') && !flat.includes('other-secret') && !flat.includes(SECRET));
   const script = Buffer.from(argv[argv.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
   assert.equal(script, LAZARETTE_SCRIPT);
+  assert.match(script, /Unlock-LazaretteVaultInteractive/);
+  assert.match(script, /Get-LazaretteSecret -Service \$item/);
+  assert.match(script, /LAZARETTE_PATH/);
+  // The retired Arc contract is the fallback when no Lazarette 5 root is found.
   assert.match(script, /Unlock-ArcVaultInteractive/);
   assert.match(script, /Get-ArcSecret -Service \$item/);
   assert.match(script, /ARC_PATH/);
+  // The Lazarette 5 contract is probed before the Arc fallback.
+  assert.ok(script.indexOf("lib\\Lazarette.ps1") < script.indexOf("lib\\Arc.ps1"));
   assert.ok(!script.includes('my-item'));
 });
 
@@ -109,7 +115,7 @@ await test('lazarette: invalid item names are refused before anything runs', asy
 
 await test('lazarette failures map to clear errors that name the alternatives', async () => {
   await assert.rejects(resolveToken({ from: 'lazarette', env: fakeEnv({ FAKE_PS_MODE: 'locked' }) }), (e) => e instanceof TokenError && /could not be unlocked/.test(e.message) && /TALKFORGE_TOKEN or --token-file/.test(e.message));
-  await assert.rejects(resolveToken({ from: 'lazarette', env: fakeEnv({ FAKE_PS_MODE: 'notfound' }) }), /was not found \(set ARC_PATH/);
+  await assert.rejects(resolveToken({ from: 'lazarette', env: fakeEnv({ FAKE_PS_MODE: 'notfound' }) }), /was not found \(set LAZARETTE_PATH/);
   await assert.rejects(resolveToken({ from: 'lazarette', item: 'absent', env: fakeEnv() }), /"absent" is missing or ambiguous/);
   await assert.rejects(resolveToken({ from: 'lazarette', env: fakeEnv({ FAKE_VAULT: JSON.stringify({ 'talkforge-api': '' }) }) }), /is empty/);
   await assert.rejects(lazaretteProvider({ env: { [POWERSHELL_ENV]: 'definitely-not-a-real-binary-xyz' } }), /Could not start PowerShell/);
@@ -138,22 +144,43 @@ await test('CLI: a too-short token from the vault is rejected without printing i
   assert.ok(!(r.stdout + r.stderr).includes(short));
 });
 
-await test('real powershell.exe against a fake lib\\Arc.ps1 returns the item (Windows only)', async () => {
+await test('real powershell.exe against fake lib\\Lazarette.ps1 / lib\\Arc.ps1 (Windows only)', async () => {
   if (process.platform !== 'win32') { console.log('      (skipped: not Windows)'); return; }
+  const base = { ...process.env, USERPROFILE: dir };
+  delete base[POWERSHELL_ENV];
+  delete base.LAZARETTE_PATH;
+  delete base.ARC_PATH; delete base.ARC_ROOT; delete base.ARC_HOME;
+  // Lazarette 5 contract on its own: a fake lib\Lazarette.ps1 answers.
+  const laz = `${dir}/laz`;
+  mkdirSync(`${laz}/lib`, { recursive: true });
+  writeFileSync(`${laz}/lib/Lazarette.ps1`, [
+    'function Unlock-LazaretteVaultInteractive { $true }',
+    "function Get-LazaretteSecret { param([string]$Service) if ($Service -eq 'talkforge-api') { 'secret-from-fake-lazarette-0123456789' } else { throw \"no item $Service\" } }",
+  ].join('\r\n'));
+  const lazEnv = { ...base, LAZARETTE_PATH: laz.replace(/\//g, '\\') };
+  assert.equal(await lazaretteProvider({ env: lazEnv }), 'secret-from-fake-lazarette-0123456789');
+  await assert.rejects(lazaretteProvider({ options: { item: 'other' }, env: lazEnv }), /missing or ambiguous/);
+  // Both contracts in one folder: the Lazarette 5 contract wins.
+  writeFileSync(`${laz}/lib/Arc.ps1`, [
+    'function Unlock-ArcVaultInteractive { $true }',
+    "function Get-ArcSecret { param([string]$Service) if ($Service -eq 'talkforge-api') { 'secret-from-fake-arc-0123456789' } else { throw \"no item $Service\" } }",
+  ].join('\r\n'));
+  const bothEnv = { ...lazEnv, ARC_PATH: laz.replace(/\//g, '\\') };
+  assert.equal(await lazaretteProvider({ env: bothEnv }), 'secret-from-fake-lazarette-0123456789');
+  // Retired Arc contract on its own still works.
   const arc = `${dir}/arc`;
   mkdirSync(`${arc}/lib`, { recursive: true });
   writeFileSync(`${arc}/lib/Arc.ps1`, [
     'function Unlock-ArcVaultInteractive { $true }',
-    "function Get-ArcSecret { param([string]$Service) if ($Service -eq 'talkforge-api') { 'secret-from-fake-arc-0123456789' } else { throw \"no item $Service\" } }"
+    "function Get-ArcSecret { param([string]$Service) if ($Service -eq 'talkforge-api') { 'secret-from-fake-arc-0123456789' } else { throw \"no item $Service\" } }",
   ].join('\r\n'));
-  const env = { ...process.env, ARC_PATH: arc.replace(/\//g, '\\') };
-  delete env[POWERSHELL_ENV];
+  const env = { ...base, ARC_PATH: arc.replace(/\//g, '\\') };
   assert.equal(await lazaretteProvider({ env }), 'secret-from-fake-arc-0123456789');
   await assert.rejects(lazaretteProvider({ options: { item: 'other' }, env }), /missing or ambiguous/);
   writeFileSync(`${arc}/lib/Arc.ps1`, 'function Unlock-ArcVaultInteractive { $false }\r\nfunction Get-ArcSecret { "x" }');
   await assert.rejects(lazaretteProvider({ env }), /could not be unlocked/);
   assert.equal(spawnSync('powershell.exe', ['-NoProfile', '-Command', 'exit 0']).status, 0);
-  await assert.rejects(lazaretteProvider({ env: { ...env, ARC_PATH: `${dir}/missing`, ARC_ROOT: '', ARC_HOME: '', USERPROFILE: dir } }), /was not found/);
+  await assert.rejects(lazaretteProvider({ env: { ...env, LAZARETTE_PATH: `${dir}/missing`, ARC_PATH: `${dir}/missing`, ARC_ROOT: '', ARC_HOME: '', USERPROFILE: dir } }), /was not found/);
 });
 
 const assetsDir = process.env.TALKFORGE_ASSETS || DEFAULT_ASSETS_DIR;

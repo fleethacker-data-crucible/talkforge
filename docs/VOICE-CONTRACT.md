@@ -67,7 +67,7 @@ Started with `talkforge serve [--port <n>] [--token-file <file>] [--voice <id>] 
 - **Loopback only.** The server binds `127.0.0.1`; there is no option to change that. Default port **25009** (the last port of TalkForge's 25000-25009 block); `--port` overrides it.
 - **Bearer token on every request:** `Authorization: Bearer <token>`. The server will not start without a token of 16 or more characters, given by env `TALKFORGE_TOKEN` or the first line of `--token-file`. It is compared in constant time and never logged or printed. A missing or wrong token gives `401` with `WWW-Authenticate: Bearer`.
 - **Host and Origin rules.** The `Host` header must be `127.0.0.1:<port>`, `localhost:<port>` or `[::1]:<port>`; anything else gives `403` (blocks DNS rebinding). A request with any `Origin` header (a browser page) gives `403`. Call it from a program, not from a web page.
-- Per the Fleet credentials contract, the token lives in Lazarette and callers read it by name at start; it is not kept in config files. (TalkForge itself takes it from env or a file; it does not call Lazarette.)
+- Per the Fleet credentials contract, the token lives in Lazarette and callers read it by name at start; it is not kept in config files. (TalkForge takes it from env or a file by default; `--token-from lazarette` reads it from the vault â€” full Lazarette, or Lazarette-Lite as a fallback â€” instead.)
 
 ### Request
 
