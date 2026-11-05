@@ -4,8 +4,14 @@
 //   env        env TALKFORGE_TOKEN                         (default when no --token-file)
 //   file       first line of --token-file                  (default when --token-file is given)
 //   lazarette  the vault item `talkforge-api` (override: --lazarette-item or env TALKFORGE_LAZARETTE_ITEM),
-//              read in-process through Lazarette's PowerShell contract (lib\Arc.ps1:
-//              Unlock-ArcVaultInteractive, Get-ArcSecret -Service <item>). Opt in with --token-from lazarette.
+//              read in-process through Lazarette's PowerShell contract (lib\Lazarette.ps1:
+//              Unlock-LazaretteVaultInteractive, Get-LazaretteSecret -Service <item>).
+//              Fallback: the retired Arc contract (lib\Arc.ps1: Unlock-ArcVaultInteractive,
+//              Get-ArcSecret -Service <item>). Opt in with --token-from lazarette.
+//              Point LAZARETTE_PATH (or ARC_PATH) at a Lazarette-Lite checkout and the
+//              token comes from Windows Credential Manager instead: secret-only, no custom
+//              fields or TOTP, and Lite's unlock is a no-op, so the passphrase+TOTP gate
+//              is dropped when falling back to Lite.
 // The token is returned to the caller only; it is never logged, put on a command line, or written to disk.
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
@@ -27,14 +33,28 @@ export const LAZARETTE_SCRIPT = `
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $item = $env:TF_VAULT_ITEM
-$candidates = @($env:ARC_PATH, $env:ARC_ROOT, $env:ARC_HOME,
+# Lazarette 5 contract first: lib\\Lazarette.ps1 (Unlock-LazaretteVaultInteractive,
+# Get-LazaretteSecret). It is also the contract Lazarette-Lite ships, so pointing
+# LAZARETTE_PATH at a Lite checkout reads the secret from Windows Credential Manager.
+# Fallback: the retired Arc contract, lib\\Arc.ps1 (Unlock-ArcVaultInteractive,
+# Get-ArcSecret). Both are secret-only: no custom fields, no TOTP.
+$lazCandidates = @($env:LAZARETTE_PATH, (Join-Path $env:USERPROFILE 'Projects\\Lazarette'))
+$arcCandidates = @($env:ARC_PATH, $env:ARC_ROOT, $env:ARC_HOME,
   (Join-Path $env:USERPROFILE 'Projects\\Lazarette'), (Join-Path $env:USERPROFILE 'Projects\\arc'))
 $root = $null
-foreach ($p in $candidates) { if ($p -and (Test-Path -LiteralPath (Join-Path $p 'lib\\Arc.ps1'))) { $root = (Resolve-Path $p).Path; break } }
-if (-not $root) { [Console]::Error.WriteLine('Lazarette not found (set ARC_PATH to its folder).'); exit 3 }
-. (Join-Path $root 'lib\\Arc.ps1')
-if (-not (Unlock-ArcVaultInteractive)) { [Console]::Error.WriteLine('Lazarette stayed locked (unlocking needs an interactive console).'); exit 4 }
-try { $v = Get-ArcSecret -Service $item } catch { [Console]::Error.WriteLine('Lazarette item not usable: ' + $_.Exception.Message); exit 5 }
+$contract = $null
+foreach ($p in $lazCandidates) { if ($p -and (Test-Path -LiteralPath (Join-Path $p 'lib\\Lazarette.ps1'))) { $root = (Resolve-Path $p).Path; $contract = 'lazarette'; break } }
+if (-not $root) { foreach ($p in $arcCandidates) { if ($p -and (Test-Path -LiteralPath (Join-Path $p 'lib\\Arc.ps1'))) { $root = (Resolve-Path $p).Path; $contract = 'arc'; break } } }
+if (-not $root) { [Console]::Error.WriteLine('Lazarette not found (set LAZARETTE_PATH to its folder, or ARC_PATH for the retired Arc contract).'); exit 3 }
+if ($contract -eq 'lazarette') {
+  . (Join-Path $root 'lib\\Lazarette.ps1')
+  if (-not (Unlock-LazaretteVaultInteractive)) { [Console]::Error.WriteLine('Lazarette stayed locked (unlocking needs an interactive console).'); exit 4 }
+  try { $v = Get-LazaretteSecret -Service $item } catch { [Console]::Error.WriteLine('Lazarette item not usable: ' + $_.Exception.Message); exit 5 }
+} else {
+  . (Join-Path $root 'lib\\Arc.ps1')
+  if (-not (Unlock-ArcVaultInteractive)) { [Console]::Error.WriteLine('Lazarette stayed locked (unlocking needs an interactive console).'); exit 4 }
+  try { $v = Get-ArcSecret -Service $item } catch { [Console]::Error.WriteLine('Lazarette item not usable: ' + $_.Exception.Message); exit 5 }
+}
 [Console]::Out.Write($v)
 `;
 
@@ -58,7 +78,7 @@ export async function lazaretteProvider({ options = {}, env = process.env, spawn
     p.on('error', (e) => rej(new TokenError(`Could not start PowerShell to reach Lazarette: ${e.message}`)));
     p.on('close', (code) => {
       if (code === 0) return res(Buffer.concat(chunks).toString('utf8').trim());
-      const why = { 3: 'Lazarette was not found (set ARC_PATH to its folder)', 4: 'Lazarette could not be unlocked (run in an interactive console)', 5: `vault item "${item}" is missing or ambiguous` }[code];
+      const why = { 3: 'Lazarette was not found (set LAZARETTE_PATH to its folder, or ARC_PATH for the retired Arc contract)', 4: 'Lazarette could not be unlocked (run in an interactive console)', 5: `vault item "${item}" is missing or ambiguous` }[code];
       rej(new TokenError(`Lazarette: ${why || `PowerShell exited with code ${code}`}. Other ways to give the token: env TALKFORGE_TOKEN or --token-file.`));
     });
   });

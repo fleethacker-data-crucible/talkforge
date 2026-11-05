@@ -1,3 +1,4 @@
 # fleet-gate allowlist for this repo (format: <kind>:<regex>  # why). See comms ci/fleet-gate/README.md.
 
 line:\blib[\\/]{1,2}Arc\.ps1\b   # lib\Arc.ps1 is the file name of Lazarette's PowerShell contract that tools/token-provider.mjs loads (a code path, not the product name); same entry as Lazarette's own allowlist. Needs Anthony's approval.
+line:\blib[\\/]{1,2}Lazarette\.ps1\b   # lib\Lazarette.ps1 is the file name of Lazarette's PowerShell contract that tools/token-provider.mjs loads (a code path, not the product name); same entry as the lib\Arc.ps1 line. Needs Anthony's approval.
