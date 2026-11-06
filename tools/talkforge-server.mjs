@@ -34,10 +34,78 @@ export function checkToken(token) {
 
 const digest = (s) => createHash('sha256').update(s).digest();
 
+const BEARER = 'bearer';
+
+// Line terminators are the characters a JavaScript "." does not match.
+function isLineTerminator(code) {
+  return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
+}
+
+// Whitespace matched by JavaScript's non-unicode whitespace class. Same set String.prototype.trim removes.
+function isJsWhitespace(code) {
+  return code === 0x09 || code === 0x0a || code === 0x0b || code === 0x0c
+    || code === 0x0d || code === 0x20 || code === 0xA0 || code === 0x1680
+    || (code >= 0x2000 && code <= 0x200A) || code === 0x2028 || code === 0x2029
+    || code === 0x202F || code === 0x205F || code === 0x3000 || code === 0xFEFF;
+}
+
+// Trimmed bearer credential, or null when `header` is not a Bearer credential.
+// One forward scan: case-insensitive "Bearer", one or more whitespace characters,
+// then a credential with no line terminator. A whitespace run followed by a catch-all
+// match backtracks on a long space run plus a line terminator, so this stays a straight
+// scan. Acceptance matches the previous parser, including a whitespace-only credential
+// (it trims to ''). `stats`, if passed, receives { steps } — characters examined.
+export function bearerCredential(header, stats) {
+  let steps = 0;
+  const note = () => { steps++; };
+  const done = (value) => {
+    if (stats) stats.steps = steps;
+    return value;
+  };
+
+  const raw = header || '';
+  const value = typeof raw === 'string' ? raw : String(raw);
+  const n = value.length;
+  if (n < 6) {
+    for (let k = 0; k < n; k++) note();
+    return done(null);
+  }
+  for (let k = 0; k < 6; k++) {
+    note();
+    let c = value.charCodeAt(k);
+    if (c >= 0x41 && c <= 0x5A) c += 0x20;
+    if (c !== BEARER.charCodeAt(k)) return done(null);
+  }
+
+  let i = 6;
+  let lastLineTerminator = -1;
+  while (i < n && isJsWhitespace(value.charCodeAt(i))) {
+    note();
+    if (isLineTerminator(value.charCodeAt(i))) lastLineTerminator = i;
+    i++;
+  }
+  if (i === 6) return done(null);
+
+  if (i === n) {
+    // Remainder is only whitespace. The credential is the non-line-terminator run
+    // after the last line terminator, and it still needs a whitespace character before it.
+    if (lastLineTerminator < 0) return done(n >= 8 ? '' : null);
+    const suffixStart = lastLineTerminator + 1;
+    if (suffixStart >= n || suffixStart <= 6) return done(null);
+    return done('');
+  }
+
+  for (let j = i; j < n; j++) {
+    note();
+    if (isLineTerminator(value.charCodeAt(j))) return done(null);
+  }
+  return done(value.slice(i).trim());
+}
+
 export function tokenMatches(header, token) {
-  const m = /^Bearer\s+(.+)$/i.exec(header || '');
-  if (!m) return false;
-  return timingSafeEqual(digest(m[1].trim()), digest(token));
+  const credential = bearerCredential(header);
+  if (credential === null) return false;
+  return timingSafeEqual(digest(credential), digest(token));
 }
 
 function hostOk(host, port) {
