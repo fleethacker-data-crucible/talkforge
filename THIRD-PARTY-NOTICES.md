@@ -34,13 +34,13 @@ The voice models come from <https://huggingface.co/rhasspy/piper-voices>, which 
 
 | Voice | Dataset | Licence | Training, per the model card |
 |---|---|---|---|
-| `en_US-libritts_r-medium` | LibriTTS-R: Koizumi et al., 2023, <https://www.openslr.org/141/> | CC BY 4.0 | Fine-tuned from the Lessac medium voice |
-| `en_US-libritts-high` | LibriTTS: Zen et al., 2019, <https://www.openslr.org/60/> | CC BY 4.0 | Trained from scratch |
-| `en_GB-vctk-medium` | CSTR VCTK Corpus 0.92: Yamagishi, Veaux and MacDonald, University of Edinburgh, 2019, <https://datashare.ed.ac.uk/handle/10283/3443> | CC BY 4.0 | Fine-tuned from the Lessac medium voice |
+| `en_US-libritts-high` (default) | LibriTTS: Zen et al., 2019, <https://www.openslr.org/60/> | CC BY 4.0 | Trained from scratch |
+| `en_US-libritts_r-medium` (optional) | LibriTTS-R: Koizumi et al., 2023, <https://www.openslr.org/141/> | CC BY 4.0 | Fine-tuned from the Lessac medium voice |
+| `en_GB-vctk-medium` (optional) | CSTR VCTK Corpus 0.92: Yamagishi, Veaux and MacDonald, University of Edinburgh, 2019, <https://datashare.ed.ac.uk/handle/10283/3443> | CC BY 4.0 | Fine-tuned from the Lessac medium voice |
 
 CC BY 4.0 text: <https://creativecommons.org/licenses/by/4.0/>. The recordings were changed by being used to train these models.
 
-These licences cover the datasets. They do not cover the Lessac voice that two of these models started from.
+These licences cover the datasets. They do not cover the Lessac voice that the two optional models started from, and that voice was trained on data under a research licence (see below). Check those terms before using or redistributing either one.
 
 ### Voices no longer offered
 

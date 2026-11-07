@@ -1,17 +1,17 @@
 {
   "models": [
     {
-      "id": "en_US-libritts_r-medium",
-      "label": "LibriTTS-R Medium (~75 MB, 904 voices)",
+      "id": "en_US-libritts-high",
+      "label": "LibriTTS High (~137 MB, 904 voices)",
       "default": true
     },
     {
-      "id": "en_US-libritts-high",
-      "label": "LibriTTS High (~137 MB, 904 voices)"
+      "id": "en_US-libritts_r-medium",
+      "label": "LibriTTS-R Medium (optional, Lessac base, ~75 MB, 904 voices)"
     },
     {
       "id": "en_GB-vctk-medium",
-      "label": "VCTK Medium (British, 109 speakers)"
+      "label": "VCTK Medium (optional, Lessac base, British, 109 speakers)"
     }
   ]
 }

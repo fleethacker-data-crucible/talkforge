@@ -11,7 +11,7 @@
 #   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1
 #   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1 -AssetRoot .\assets
 #   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1 -AllowUpstream   (opt in to CDN/Hugging Face; still SHA-256 verified)
-#   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1 -Only 'models/en_US-libritts_r-medium*','wasm/*','vendor/onnx/*.jsep.wasm'
+#   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1 -Only 'models/en_US-libritts-high*','wasm/*','vendor/onnx/*.jsep.wasm'
 #
 # -Only takes wildcard patterns matched against the manifest "dest" (default: everything).
 # Hash rule: .json files are hashed with CR bytes removed (checkouts may be CRLF).

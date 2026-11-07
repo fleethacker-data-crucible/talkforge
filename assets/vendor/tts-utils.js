@@ -163,7 +163,7 @@ export function concatWavBuffers(buffers, gapSeconds = 0) {
 }
 
 // Share one in-flight async load per key. Callers that arrive while a load is running get the same
-// promise, so the work (for example a 75 MB model) is not started twice. A failed load is forgotten
+// promise, so the work (for example a 137 MB model) is not started twice. A failed load is forgotten
 // so the next call retries.
 export function loadOnce(inFlight, key, start) {
   if (inFlight.has(key)) return inFlight.get(key);

@@ -112,7 +112,7 @@ Describe 'Start-TalkForge.ps1 request path rules and caching' {
         }
     }
     It 'allows normal asset and page paths' {
-        foreach ($p in '', 'TalkForge-tts.html', 'assets/models/en_US-libritts_r-medium.onnx', 'assets\\vendor\\piper-engine.js', 'README.md') {
+        foreach ($p in '', 'TalkForge-tts.html', 'assets/models/en_US-libritts-high.onnx', 'assets\\vendor\\piper-engine.js', 'README.md') {
             Test-RequestPathAllowed $p | Should -BeTrue -Because $p
         }
     }
