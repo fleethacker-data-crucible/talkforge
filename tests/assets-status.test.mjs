@@ -112,7 +112,7 @@ const realAssets = process.env.TALKFORGE_ASSETS || DEFAULT_ASSETS_DIR;
 await test("the repo's own manifest names the default voice's five files (and verifies real assets when present)", async () => {
   const d = await assetsStatus({ assetsDir: realAssets, voice: DEFAULT_VOICE, hash: false });
   assert.deepEqual(d.files.map((f) => f.dest).sort(), [
-    'models/en_US-lessac-high.onnx', 'models/en_US-lessac-high.onnx.json', 'vendor/onnx/ort-wasm-simd-threaded.jsep.wasm',
+    'models/en_US-libritts_r-medium.onnx', 'models/en_US-libritts_r-medium.onnx.json', 'vendor/onnx/ort-wasm-simd-threaded.jsep.wasm',
     'wasm/piper_phonemize.data', 'wasm/piper_phonemize.wasm'
   ]);
   assert.ok(d.files.every((f) => /^[0-9a-f]{64}$/.test(f.expected)));

@@ -39,20 +39,20 @@ test('plain text: one scene per blank-line paragraph, numbered ids', () => {
 
 test('JSON object: defaults, per-scene overrides, tts alias, pronunciations', () => {
   const src = JSON.stringify({
-    voice: 'en_GB-alan-medium', speed: 1.1, sceneGap: 0.4, pronunciations: { PacketRat: 'packet rat' },
+    voice: 'en_GB-vctk-medium', speed: 1.1, sceneGap: 0.4, pronunciations: { PacketRat: 'packet rat' },
     scenes: [
       { id: 'intro', text: 'PacketRat is here.' },
-      { id: 'two', tts: 'Fast one.', speed: 2, voice: 'en_US-amy-medium', pauseAfter: 1 },
+      { id: 'two', tts: 'Fast one.', speed: 2, voice: 'en_US-libritts-high', pauseAfter: 1 },
       'Bare string scene.'
     ]
   });
   const s = parseScript(src, { isJson: true, defaults: { voice: 'ignored' } });
   assert.equal(s[0].text, 'packet rat is here.');
-  assert.equal(s[0].voice, 'en_GB-alan-medium');
+  assert.equal(s[0].voice, 'en_GB-vctk-medium');
   assert.equal(s[0].speed, 1.1);
   assert.equal(s[0].pauseAfter, 0.4);
   assert.equal(s[1].text, 'Fast one.');
-  assert.equal(s[1].voice, 'en_US-amy-medium');
+  assert.equal(s[1].voice, 'en_US-libritts-high');
   assert.equal(s[1].speed, 2);
   assert.equal(s[1].pauseAfter, 1);
   assert.equal(s[2].id, 'scene-03');

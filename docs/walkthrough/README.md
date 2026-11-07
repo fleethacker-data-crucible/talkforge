@@ -22,7 +22,7 @@ TalkForge opens with the text box, the model and voice pickers and the playback 
 
 Paste or drop text, then choose a model, voice and speed.
 
-![TalkForge with a short demo sentence pasted, the Lessac Medium single-speaker model selected and speed 1.0.](../assets/walkthrough/02-text-and-voice.png)
+![TalkForge with a short demo sentence pasted, a single-speaker model selected and speed 1.0. This screenshot shows a voice TalkForge no longer offers.](../assets/walkthrough/02-text-and-voice.png)
 
 ### 3. Listen
 

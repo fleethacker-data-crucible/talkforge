@@ -74,7 +74,7 @@ test('required STT assets include Whisper, exclude Piper and remote URLs', () =>
   assert.ok(paths.includes('stt/models/whisper-tiny.en/onnx/decoder_model_merged_quantized.onnx'));
   assert.ok(paths.includes('stt/transformers.min.js'));
   assert.ok(paths.includes('vendor/onnx/ort-wasm-simd-threaded.wasm'));
-  assert.ok(!paths.some((p) => p.includes('piper') || p.includes('lessac') || p.startsWith('http')));
+  assert.ok(!paths.some((p) => p.includes('piper') || p.includes('libritts') || p.startsWith('http')));
 });
 
 test('formatMissingSttAssets names files and the populate step', () => {

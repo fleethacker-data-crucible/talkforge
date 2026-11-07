@@ -1,7 +1,7 @@
 // tools/talkforge-server.mjs - loopback-only, token-checked speech endpoint (offline).
 //
 //   POST /v1/audio/speech   Authorization: Bearer <token>
-//        { "input": "text", "voice"?: "en_US-lessac-high", "speed"?: 1, "speaker"?: 0,
+//        { "input": "text", "voice"?: "en_US-libritts_r-medium", "speed"?: 1, "speaker"?: 0,
 //          "response_format"?: "wav" | "mp3" }   ->  audio bytes
 //
 // Shape follows OpenAI /v1/audio/speech so Fairlead can route to it. Differences: default format

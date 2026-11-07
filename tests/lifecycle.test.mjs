@@ -39,7 +39,7 @@ function request(port, { method = 'GET', path, headers = {}, body } = {}) {
   });
 }
 const fakeSynth = () => ({
-  assetsDir: join(tmpdir(), 'tf-no-such-assets'), defaultVoice: 'en_US-lessac-high',
+  assetsDir: join(tmpdir(), 'tf-no-such-assets'), defaultVoice: 'en_US-libritts_r-medium',
   render: async (req) => ({ bytes: Buffer.from('RIFF....WAVEfake'), mime: 'audio/wav', seconds: 1, voice: req.voice })
 });
 const speak = (port) => request(port, { method: 'POST', path: '/v1/audio/speech', headers: auth, body: { input: 'hi' } });

@@ -10,7 +10,7 @@ assets/
 ├── release-base.txt                  # release the large files come from (committed)
 ├── models/
 │   ├── <voice>.onnx.json             # voice config (committed)
-│   └── <voice>.onnx                  # model, 60-140 MB (populate-assets)
+│   └── <voice>.onnx                  # model, 75-140 MB (populate-assets)
 ├── wasm/
 │   ├── piper_phonemize.wasm          # phonemizer (committed)
 │   └── piper_phonemize.data          # ~18 MB (populate-assets)

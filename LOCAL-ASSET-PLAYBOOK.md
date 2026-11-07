@@ -16,7 +16,7 @@ cd talkforge
 
 `populate-assets` downloads the models, `piper_phonemize.data` and the ONNX Runtime WASM from the GitHub Release in `assets/release-base.txt`, and checks each against the SHA-256 in `assets-manifest.json`. It uses `gh release download` when the GitHub CLI is signed in (the repo is private); otherwise the anonymous release URL. Upstream CDN / Hugging Face is used only if you opt in (`-AllowUpstream` / `TALKFORGE_ALLOW_UPSTREAM=1`).
 
-To carry only some voices, limit the run: `TALKFORGE_ONLY="models/en_US-lessac-high*,wasm/*,vendor/onnx/*.jsep.wasm" ./populate-assets.sh` (PowerShell: `-Only`).
+To carry only some voices, limit the run: `TALKFORGE_ONLY="models/en_US-libritts_r-medium*,wasm/*,vendor/onnx/*.jsep.wasm" ./populate-assets.sh` (PowerShell: `-Only`).
 
 ## Step 2 - Move the folder to the offline machine
 
@@ -50,5 +50,5 @@ Any other static file server also works if it serves the repo folder and sends `
 
 ## Notes
 
-- Voices come from the rhasspy/piper-voices catalogue (MIT licence); see each model card for details.
+- Voices come from the rhasspy/piper-voices catalogue. Each voice has its own licence, whatever the catalogue’s MIT label says; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 - All inference and encoding run locally; no server-side TTS is involved.
