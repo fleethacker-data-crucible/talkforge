@@ -78,7 +78,7 @@ The repo's releases are private, so an anonymous download of the release returns
 
 ## Features
 
-- Multi-speaker models (LibriTTS, LibriTTS-R, VCTK) with searchable speaker list. LibriTTS High is the default. LibriTTS-R and VCTK are optional: they are built on the Lessac voice, so read [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) before choosing them.
+- Multi-speaker models (LibriTTS, LibriTTS-R, VCTK) with searchable speaker list. LibriTTS High is the default. LibriTTS-R is about three times faster, so choose it if the pause before speech matters. LibriTTS-R and VCTK are optional: they are built on the Lessac voice, so read [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) before choosing them.
 - Background first-sentence synthesis for faster start
 - Read-all / selection / click-to-read modes
 - MP3 download of generated audio

@@ -7,7 +7,7 @@
     },
     {
       "id": "en_US-libritts_r-medium",
-      "label": "LibriTTS-R Medium (optional, Lessac base, ~75 MB, 904 voices)"
+      "label": "LibriTTS-R Medium (faster, ~75 MB, 904 voices, optional, Lessac base)"
     },
     {
       "id": "en_GB-vctk-medium",
