@@ -25,7 +25,7 @@ function checkJs(label, source) {
 // Every inline <script> in the page (module or classic; external src scripts and data blocks are skipped)
 const html = readFileSync(join(root, 'TalkForge-tts.html'), 'utf8');
 let inline = 0;
-for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi)) {
   if (/\bsrc\s*=/i.test(m[1]) || /type\s*=\s*["'](?!module|text\/javascript)/i.test(m[1]) || !m[2].trim()) continue;
   inline++;
   checkJs(`TalkForge-tts.html inline script #${inline}`, m[2]);
