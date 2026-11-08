@@ -59,6 +59,7 @@ Earlier versions and releases included the voices below. TalkForge no longer lis
 |---|---|---|
 | ONNX Runtime Web 1.22 (<https://github.com/microsoft/onnxruntime>) | `assets/vendor/onnx/*` | MIT, Copyright (c) Microsoft Corporation, text below. Bundled components keep the notices inside the files |
 | Whisper tiny.en, ONNX conversion (<https://huggingface.co/Xenova/whisper-tiny.en>) | `assets/stt/models/whisper-tiny.en/*` | Apache-2.0 per its model card, text below |
+| transformers.js 3.8.1 (<https://github.com/huggingface/transformers.js>), `dist/transformers.min.js` | `assets/stt/transformers.min.js` | Apache-2.0 |
 | piper-tts-web-demo (<https://github.com/clowerweb/piper-tts-web-demo>) | Basis for the approach in `assets/vendor/piper-engine.js` | Apache-2.0 |
 | Exo 2 and Syne Mono fonts | `assets/vendor/ui-kit/fonts/*` | SIL OFL 1.1, text alongside the fonts |
 
