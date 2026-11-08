@@ -20,7 +20,7 @@ talkforge speak [text...] [--out <file|->] [--voice <id>] [--speed <n>] [--speak
 | Text | The arguments, joined with spaces; or stdin when there are none (or the argument is `-`). |
 | `--out` | A file, or `-` for stdout. With no `--out`, audio goes to stdout when it is piped; on a terminal it is refused (exit 64). |
 | `--format` | `wav` (default) or `mp3`; taken from a `.mp3` extension on `--out` if not given. |
-| `--voice` | An installed Piper voice id. Default `en_US-lessac-high`. |
+| `--voice` | An installed Piper voice id. Default `en_US-libritts-high`. |
 | `--speed` | 1 = normal, 1.1 = 10 percent faster. 0.25 to 4. |
 | `--speaker` | Speaker id for multi-speaker voices. Default 0. |
 | Output | WAV: 16-bit mono PCM, one header. MP3: mono, 128 kbps. Sample rate follows the voice (22,050 Hz for the default). One line on stderr: duration, format, voice. |
@@ -39,20 +39,20 @@ For many scenes with timings, use `tools/synth-cli.mjs` (see the README "Voiceov
 
 ## Getting the voice files for an offline render (signal-gun and other callers)
 
-The Piper voices are release assets (about 110 MB for the default `en_US-lessac-high`, about 150 MB with the runtime files), not part of the repo. This is the documented step, and it needs one connection, once:
+The Piper voices are release assets (about 137 MB for the default `en_US-libritts-high`, about 180 MB with the runtime files), not part of the repo. This is the documented step, and it needs one connection, once:
 
 1. **On a build or internet-connected machine** with the repo cloned, fetch only what the voice needs. If the GitHub CLI is signed in (`gh auth login`) it is used automatically, which is how a private release works:
    ```
-   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1 -Only 'models/en_US-lessac-high*','wasm/*','vendor/onnx/*.jsep.wasm'
-   TALKFORGE_ONLY="models/en_US-lessac-high*,wasm/*,vendor/onnx/*.jsep.wasm" ./populate-assets.sh
+   powershell -ExecutionPolicy Bypass -File .\populate-assets.ps1 -Only 'models/en_US-libritts-high*','wasm/*','vendor/onnx/*.jsep.wasm'
+   TALKFORGE_ONLY="models/en_US-libritts-high*,wasm/*,vendor/onnx/*.jsep.wasm" ./populate-assets.sh
    ```
    Every file is checked against the SHA-256 in `assets-manifest.json`; a bad file is never kept.
 2. **Copy the repo folder** (with its `assets/`) to the machine that renders. Nothing is downloaded there.
-3. **Preflight before rendering**: `talkforge assets status --voice en_US-lessac-high --json` (add `--no-hash` for a quick presence check). It exits **0** when every file is present and verified, **2** when not, **64** for a voice that is not in the manifest, and with `"ok": false` it prints the exact `populate-assets` command for the missing files under `fetch`. It never downloads anything.
+3. **Preflight before rendering**: `talkforge assets status --voice en_US-libritts-high --json` (add `--no-hash` for a quick presence check). It exits **0** when every file is present and verified, **2** when not, **64** for a voice that is not in the manifest, and with `"ok": false` it prints the exact `populate-assets` command for the missing files under `fetch`. It never downloads anything.
 
 ```json
-{ "schema": "talkforge.assets/1", "voice": "en_US-lessac-high", "assets": "C:\\talkforge\\assets", "ok": true,
-  "files": [ { "dest": "models/en_US-lessac-high.onnx", "state": "ok", "expected": "4cabf7c3...", "actual": "4cabf7c3...", "bytes": 113895201 } ],
+{ "schema": "talkforge.assets/1", "voice": "en_US-libritts-high", "assets": "C:\\talkforge\\assets", "ok": true,
+  "files": [ { "dest": "models/en_US-libritts-high.onnx", "state": "ok", "expected": "9127a559...", "actual": "9127a559...", "bytes": 136673811 } ],
   "fetch": null }
 ```
 

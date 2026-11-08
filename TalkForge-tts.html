@@ -186,7 +186,7 @@
     <img class="fleet-emblem" src="assets/brand/emblem-transparent.png" width="180" height="180" alt="TalkForge: a brass speaking trumpet above the waves">
     <div class="header-copy">
     <h1>TalkForge-tts <span id="pageVersion" style="font-size:0.7rem;color:var(--muted);font-weight:400;"></span></h1>
-    <div class="subtitle">Client-side neural text-to-speech · LibriTTS Medium by default · Fully offline after first load</div>
+    <div class="subtitle">Client-side neural text-to-speech · LibriTTS High by default · Fully offline after first load</div>
     <div id="sourceBadge" style="margin-top:0.4rem;font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:6px;display:inline-block;background:var(--sel);color:var(--text);">Loading source…</div>
     </div>
   </header>
@@ -999,8 +999,7 @@
         // Fallback static list
         modelEl.innerHTML = '';
         const fallback = [
-          { id: 'en_US-libritts_r-medium', label: 'LibriTTS-R Medium' },
-          { id: 'en_US-lessac-medium', label: 'Lessac Medium' }
+          { id: 'en_US-libritts-high', label: 'LibriTTS High' }
         ];
         fallback.forEach(m => {
           const opt = document.createElement('option');

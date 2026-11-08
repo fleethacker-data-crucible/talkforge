@@ -44,7 +44,7 @@ const auth = { authorization: `Bearer ${TOKEN}` };
 function fakeSynth(over = {}) {
   const calls = [];
   return {
-    calls, assetsDir: join(tmpdir(), 'tf-no-such-assets'), defaultVoice: 'en_US-lessac-high',
+    calls, assetsDir: join(tmpdir(), 'tf-no-such-assets'), defaultVoice: 'en_US-libritts-high',
     render: over.render || (async (req) => { calls.push(req); return { bytes: Buffer.from('RIFF....WAVEfake'), mime: 'audio/wav', seconds: 1.5, voice: req.voice }; })
   };
 }
@@ -128,15 +128,15 @@ test('200: passes parameters to the synthesizer and returns audio headers', asyn
     const r = await request(s.port, { headers: auth, body: { input: 'Hello there.', speed: 1.25, speaker: 3, response_format: 'mp3' } });
     assert.equal(r.status, 200);
     assert.equal(r.headers['content-type'], 'audio/wav'); // from the fake; the real synthesizer returns audio/mpeg for mp3
-    assert.equal(r.headers['x-talkforge-voice'], 'en_US-lessac-high');
+    assert.equal(r.headers['x-talkforge-voice'], 'en_US-libritts-high');
     assert.equal(r.headers['x-talkforge-seconds'], '1.500');
-    assert.deepEqual(synth.calls[0], { text: 'Hello there.', voice: 'en_US-lessac-high', speed: 1.25, speaker: 3, format: 'mp3' });
+    assert.deepEqual(synth.calls[0], { text: 'Hello there.', voice: 'en_US-libritts-high', speed: 1.25, speaker: 3, format: 'mp3' });
     // foreign voice names (OpenAI clients send "alloy") fall back to the default voice
     await request(s.port, { headers: auth, body: { input: 'x', voice: 'alloy' } });
-    assert.equal(synth.calls[1].voice, 'en_US-lessac-high');
+    assert.equal(synth.calls[1].voice, 'en_US-libritts-high');
     // path traversal in voice never reaches the file system check as anything but a fallback
     await request(s.port, { headers: auth, body: { input: 'x', voice: '../../etc/passwd' } });
-    assert.equal(synth.calls[2].voice, 'en_US-lessac-high');
+    assert.equal(synth.calls[2].voice, 'en_US-libritts-high');
   } finally { await s.close(); }
 });
 

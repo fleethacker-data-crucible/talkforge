@@ -10,7 +10,7 @@ import { readFile, access } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
-export const DEFAULT_VOICE = 'en_US-lessac-high';
+export const DEFAULT_VOICE = 'en_US-libritts-high';
 export const DEFAULT_ASSETS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'assets');
 
 // Files a voice needs, relative to the assets folder (the same set the page checks).

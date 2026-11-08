@@ -53,6 +53,7 @@ jobs:
           fi
           if [[ "$TAG" == *.0 ]]; then
             gh release upload "$TAG" --clobber \
+              THIRD-PARTY-NOTICES.md \
               assets/models/*.onnx \
               assets/wasm/piper_phonemize.data \
               assets/wasm/piper_phonemize.wasm \

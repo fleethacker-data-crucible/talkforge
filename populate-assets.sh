@@ -11,7 +11,7 @@
 # Usage:
 #   chmod +x populate-assets.sh
 #   ./populate-assets.sh
-#   TALKFORGE_ONLY="models/en_US-lessac-high*,wasm/*,vendor/onnx/*.jsep.wasm" ./populate-assets.sh
+#   TALKFORGE_ONLY="models/en_US-libritts-high*,wasm/*,vendor/onnx/*.jsep.wasm" ./populate-assets.sh
 #
 # TALKFORGE_ONLY: comma-separated wildcard patterns matched against the manifest "dest".
 # Hash rule: .json files are hashed with CR bytes removed (checkouts may be CRLF).

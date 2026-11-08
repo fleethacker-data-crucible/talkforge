@@ -12,7 +12,7 @@ permissions:
 env:
   ASSET_TAG: v1.3.0
   # Smallest voice: keeps the CI download to about 100 MB.
-  TALKFORGE_TEST_VOICE: en_US-lessac-medium
+  TALKFORGE_TEST_VOICE: en_US-libritts-high
 
 jobs:
   unit:
@@ -51,7 +51,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            assets/models/en_US-lessac-medium.onnx
+            assets/models/en_US-libritts-high.onnx
             assets/vendor/onnx/ort-wasm-simd-threaded.jsep.wasm
             assets/wasm/piper_phonemize.data
           key: assets-${{ env.ASSET_TAG }}-${{ hashFiles('assets-manifest.json') }}
@@ -64,18 +64,18 @@ jobs:
           set -e
           mkdir -p dl
           gh release download "$ASSET_TAG" --repo "$GITHUB_REPOSITORY" --dir dl \
-            --pattern 'en_US-lessac-medium.onnx' \
+            --pattern 'en_US-libritts-high.onnx' \
             --pattern 'ort-wasm-simd-threaded.jsep.wasm' \
             --pattern 'piper_phonemize.data'
           mkdir -p assets/models assets/vendor/onnx assets/wasm
-          mv dl/en_US-lessac-medium.onnx assets/models/
+          mv dl/en_US-libritts-high.onnx assets/models/
           mv dl/ort-wasm-simd-threaded.jsep.wasm assets/vendor/onnx/
           mv dl/piper_phonemize.data assets/wasm/
 
       - name: Verify SHA-256 of the assets (fails on any mismatch)
         run: |
           # Files are already in place, so populate-assets only verifies them and never downloads.
-          TALKFORGE_ONLY='models/en_US-lessac-medium.onnx,models/en_US-lessac-medium.onnx.json,vendor/onnx/ort-wasm-simd-threaded.jsep.wasm,wasm/piper_phonemize.*' \
+          TALKFORGE_ONLY='models/en_US-libritts-high.onnx,models/en_US-libritts-high.onnx.json,vendor/onnx/ort-wasm-simd-threaded.jsep.wasm,wasm/piper_phonemize.*' \
             bash ./populate-assets.sh
 
       - name: Offline synthesis smoke test (real engine, WAV valid and non-silent)

@@ -15,13 +15,6 @@
       "rating": 4
     },
     {
-      "model": "en_US-lessac-high",
-      "speakerId": 0,
-      "name": "Lessac High",
-      "description": "Single-speaker high-quality American audiobook voice.",
-      "rating": 5
-    },
-    {
       "model": "en_GB-vctk-medium",
       "speakerId": 3,
       "name": "British Male (p250)",

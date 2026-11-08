@@ -4,7 +4,7 @@
 // Needs the local assets. By default a missing asset SKIPS the test (fresh clone, no models);
 // with TALKFORGE_REQUIRE_ASSETS=1 (set in CI) a missing asset FAILS it, so CI cannot go green
 // without actually synthesizing. TALKFORGE_ASSETS and TALKFORGE_TEST_VOICE override the
-// assets folder and voice (CI uses the smaller en_US-lessac-medium).
+// assets folder and voice (CI uses en_US-libritts-high, which was trained from scratch).
 import assert from 'node:assert/strict';
 import { DEFAULT_ASSETS_DIR, DEFAULT_VOICE, findMissingAssets, loadVoice } from '../tools/node-engine.mjs';
 import { parseWav, pcmStats } from '../tools/synth-lib.mjs';

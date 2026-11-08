@@ -68,7 +68,7 @@ After the workflow finishes, `populate-assets.sh` / `.ps1` / `.bat` will pull th
 
 ### Integrity checks
 
-Every asset in `assets-manifest.json` has a `sha256`. `populate-assets` downloads to a `.part` file, verifies it, and only then moves it into place; a mismatch is reported (expected vs actual), the file is not kept, and the script exits with code 1. Files already present are verified too. `.json` configs are hashed with CR bytes removed so CRLF checkouts match. `-Only` (PowerShell) or `TALKFORGE_ONLY` (shell) limits the run to wildcard patterns, for example `models/en_US-lessac-high*,wasm/*,vendor/onnx/*.jsep.wasm`.
+Every asset in `assets-manifest.json` has a `sha256`. `populate-assets` downloads to a `.part` file, verifies it, and only then moves it into place; a mismatch is reported (expected vs actual), the file is not kept, and the script exits with code 1. Files already present are verified too. `.json` configs are hashed with CR bytes removed so CRLF checkouts match. `-Only` (PowerShell) or `TALKFORGE_ONLY` (shell) limits the run to wildcard patterns, for example `models/en_US-libritts-high*,wasm/*,vendor/onnx/*.jsep.wasm`.
 
 If the page cannot find a file it needs, it lists exactly which `assets/...` files are missing and what to run.
 
@@ -78,7 +78,7 @@ The repo's releases are private, so an anonymous download of the release returns
 
 ## Features
 
-- Multi-speaker models (LibriTTS-R, VCTK) with searchable speaker list
+- Multi-speaker models (LibriTTS, LibriTTS-R, VCTK) with searchable speaker list. LibriTTS High is the default. LibriTTS-R is about three times faster, so choose it if the pause before speech matters. LibriTTS-R and VCTK are optional: they are built on the Lessac voice, so read [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) before choosing them.
 - Background first-sentence synthesis for faster start
 - Read-all / selection / click-to-read modes
 - MP3 download of generated audio
@@ -107,7 +107,7 @@ tests/
 `tools/synth-cli.mjs` turns a script into one audio file per scene plus a timing file, from the command line, fully offline (local assets only, no browser, no network). It runs the same Piper engine as the page under Node 18 or newer.
 
 ```bash
-node tools/synth-cli.mjs script.json --out audio            # WAV, default voice en_US-lessac-high
+node tools/synth-cli.mjs script.json --out audio            # WAV, default voice en_US-libritts-high
 node tools/synth-cli.mjs script.txt  --out audio --format mp3 --speed 1.05
 ```
 
@@ -115,11 +115,11 @@ node tools/synth-cli.mjs script.txt  --out audio --format mp3 --speed 1.05
 
 ```json
 {
-  "voice": "en_US-lessac-high", "speed": 1.0, "sceneGap": 0.4,
+  "voice": "en_US-libritts-high", "speed": 1.0, "sceneGap": 0.4,
   "pronunciations": { "PacketRat": "packet rat" },
   "scenes": [
     { "id": "intro", "text": "PacketRat triages your inbox." },
-    { "id": "close", "text": "Thanks for watching.", "speed": 0.95, "voice": "en_US-amy-medium", "speaker": 0, "pauseAfter": 1 }
+    { "id": "close", "text": "Thanks for watching.", "speed": 0.95, "voice": "en_GB-vctk-medium", "speaker": 0, "pauseAfter": 1 }
   ]
 }
 ```
@@ -131,17 +131,17 @@ A bare array of scenes (or of strings) also works. `text` may be written `tts`. 
 **Output.** `<out>/<id>.wav|mp3` and `<out>/timing.json`:
 
 ```json
-{ "script": "script.json", "voice": "en_US-lessac-high", "format": "wav", "sampleRate": 22050,
+{ "script": "script.json", "voice": "en_US-libritts-high", "format": "wav", "sampleRate": 22050,
   "sentenceGap": 0.32, "totalSeconds": 6.317,
   "scenes": [ { "id": "intro", "file": "intro.wav", "start": 0, "duration": 3.095,
-                "voice": "en_US-lessac-high", "speed": 1, "speaker": 0, "text": "..." } ] }
+                "voice": "en_US-libritts-high", "speed": 1, "speaker": 0, "text": "..." } ] }
 ```
 
 `start` and `duration` are in seconds. Scenes are laid end to end: the next `start` is the previous `start` + `duration` + that scene's `pauseAfter` (default `--scene-gap`, default 0). Files contain no trailing silence, so a renderer can place each file at its `start`. `text` is the text after pronunciation replacement.
 
 **Exit codes.** 0 ok; 1 error (bad script, silent output, engine failure); 2 assets missing (the message lists each missing file, and nothing is downloaded); 64 bad usage.
 
-**Assets.** The default voice needs `models/en_US-lessac-high.onnx` and its `.json`, `vendor/onnx/ort-wasm-simd-threaded.jsep.wasm` and `wasm/piper_phonemize.wasm` + `.data`. Get them with `populate-assets`. From another script, `import { synthesizeScript } from './tools/synth-cli.mjs'` returns the same timing object.
+**Assets.** The default voice needs `models/en_US-libritts-high.onnx` and its `.json`, `vendor/onnx/ort-wasm-simd-threaded.jsep.wasm` and `wasm/piper_phonemize.wasm` + `.data`. Get them with `populate-assets`. From another script, `import { synthesizeScript } from './tools/synth-cli.mjs'` returns the same timing object.
 
 Run the tests with `node tests/synth-cli.test.mjs`; the end-to-end case is skipped when the assets are absent (set `TALKFORGE_REQUIRE_ASSETS=1` to make that a failure).
 
@@ -155,7 +155,7 @@ echo "Piped text." | talkforge speak --format mp3 > out.mp3   # text from stdin,
 TALKFORGE_TOKEN=<16+ chars> talkforge serve                    # endpoint on 127.0.0.1:25009
 ```
 
-`speak` options: `--out <file|->`, `--voice` (default en_US-lessac-high), `--speed` (1 = normal), `--speaker`, `--format wav|mp3`, `--assets <dir>`. Exit codes: 0 ok, 1 error, 2 assets missing, 64 bad usage.
+`speak` options: `--out <file|->`, `--voice` (default en_US-libritts-high), `--speed` (1 = normal), `--speaker`, `--format wav|mp3`, `--assets <dir>`. Exit codes: 0 ok, 1 error, 2 assets missing, 64 bad usage.
 
 **Machine-readable output.** `talkforge version --json` prints `{"schema": "talkforge.version/1", "version", "node"}`; `talkforge speak ... --out <file> --json` prints one line `{"schema": "talkforge.speak/1", "out", "format", "voice", "seconds", "sampleRate", "bytes"}` on stdout (the audio goes to the file; `--json` without `--out` is a usage error); `voices list --json` is below. Errors stay on stderr with the exit codes above.
 
@@ -182,5 +182,5 @@ Tests: `node tests/headless.test.mjs` (the end-to-end cases skip without local a
 
 ## License
 
-MIT for the page and scripts. Model files follow the licenses of the upstream Piper voices (see each model’s MODEL_CARD on Hugging Face).
+TalkForge’s own page, scripts and docs are MIT (see [LICENSE](LICENSE)). The phonemizer files contain espeak-ng and are GPL-3.0, so any package that includes them, such as a release or a full `assets` folder, is GPL-3.0 as a whole. Voices and other third-party files keep their own terms. [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) lists them all, with sources and credits.
 
