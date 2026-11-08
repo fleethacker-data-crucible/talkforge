@@ -68,14 +68,11 @@ Whisper model files go in v1.
 - `release.yml` must upload, on `.0` tags only:
   `assets/stt/models/whisper-tiny.en/*.json` and
   `assets/stt/models/whisper-tiny.en/onnx/*.onnx`.
-- Open item, stated plainly: `transformers.min.js` is NOT in the v1 manifest.
-  PacketRat lists its SHA-256 (`aa5002b7…`) but no pinned transformers.js
-  version, and no URL was invented for it here. Until a transformers.js
-  release version is verified against that hash, added to the manifest, and
-  uploaded on a `.0` release, the Listen page stays disabled (its asset
-  check includes `stt/transformers.min.js`, and `stt-status` reports it as
-  NOT_IN_MANIFEST). That is the safe state, not a bug to work around by
-  guessing a URL.
+- `transformers.min.js` is pinned to transformers.js 3.8.1 (`@huggingface/transformers@3.8.1/dist/transformers.min.js`
+  on jsDelivr, Apache-2.0). Its SHA-256 `aa5002b7…65fa` matches the hash PacketRat already lists, and jsDelivr's
+  package metadata confirms it. Its bundled ONNX Runtime Web is a 1.22.0 build, the same line as the shared
+  `vendor/onnx/` WASM. Uploading it on the next `.0` release is still to do; until then populate fetches it
+  from the pinned jsDelivr URL.
 - If a hash mismatches at populate time, populate fails that file and keeps
   nothing. That is the correct outcome, not a reason to relax the check.
 
