@@ -9,6 +9,9 @@
 assets/**/*.onnx
 assets/**/*.wasm
 assets/**/*.data
+# Speech-to-text files (populate-assets -Only 'stt/*'): Whisper configs and transformers.js
+assets/stt/models/
+assets/stt/transformers.min.js
 serve-windows.log
 TalkForge.log
 
