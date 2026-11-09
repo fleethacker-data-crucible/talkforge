@@ -136,12 +136,14 @@ function readBody(req, limit) {
   });
 }
 
-// synth: createSynthesizer() result. options: { token, port (0 = any free), assetsDir, log }
+// synth: createSynthesizer() result. options: { token, tokens (more accepted tokens), port (0 = any free), assetsDir, log }
 // Resolves { server, port, close() } once listening.
 //   lifecycle: version/scriptPath are reported by /__fleethacker/id; idleTimeoutMs (0 = off) stops the
 //   server after that long without a speech request; onStop(reason) is called for 'shutdown' or 'idle'.
-export function startServer({ synth, token, port = DEFAULT_PORT, log = () => {}, version = '0.0.0', scriptPath = '', idleTimeoutMs = 0, onStop = () => {} }) {
-  token = checkToken(token);
+export function startServer({ synth, token, tokens = [], port = DEFAULT_PORT, log = () => {}, version = '0.0.0', scriptPath = '', idleTimeoutMs = 0, onStop = () => {} }) {
+  // token: the one it was started with; tokens: more it accepts (the local token, tools/local-token.mjs).
+  const accepted = [token, ...tokens].filter((t) => t !== undefined && t !== null && t !== '');
+  const allowed = (accepted.length ? accepted : [token]).map(checkToken);
   let boundPort = port;
   const startedAt = Date.now();
   let lastRequestAt = null;
@@ -178,7 +180,7 @@ export function startServer({ synth, token, port = DEFAULT_PORT, log = () => {},
           idleTimeoutSeconds: Math.round(idleTimeoutMs / 1000)
         });
       }
-      if (!tokenMatches(req.headers.authorization, token)) {
+      if (!allowed.some((t) => tokenMatches(req.headers.authorization, t))) {
         return fail(res, 401, 'Missing or wrong bearer token', { 'www-authenticate': 'Bearer' });
       }
       if (path === '/__fleethacker/shutdown') {

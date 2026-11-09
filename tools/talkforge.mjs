@@ -9,6 +9,7 @@ import { DEFAULT_ASSETS_DIR, DEFAULT_VOICE, MissingAssetsError } from './node-en
 import { createSynthesizer } from './synth-core.mjs';
 import { DEFAULT_PORT, checkToken, startServer } from './talkforge-server.mjs';
 import { DEFAULT_LAZARETTE_ITEM, TokenError, resolveToken } from './token-provider.mjs';
+import { ensureLocalToken, localTokenEnabled, localTokenPath } from './local-token.mjs';
 import { formatVoices, listVoices, voicesDocument } from './voices.mjs';
 import { DEFAULT_MANIFEST, assetsStatus, formatAssetsStatus } from './assets-status.mjs';
 
@@ -38,7 +39,9 @@ voices list: one line per voice (a * marks the default); --json prints {schema: 
 
 serve options:
   --port <n>           default ${DEFAULT_PORT}; 127.0.0.1 only, there is no host option
-  --token-file <file>  first line is the bearer token (or set env TALKFORGE_TOKEN); 16+ characters
+  --token-file <file>  first line is the bearer token (or set env TALKFORGE_TOKEN); 16+ characters.
+                       Optional: serve also accepts its local token, which apps of this Windows account
+                       read from %LOCALAPPDATA%\\TalkForge\\local-token (TALKFORGE_LOCAL_TOKEN=off turns it off)
   --token-from <src>   env | file | lazarette (default: file if --token-file is given, else env)
   --lazarette-item <n> vault item for --token-from lazarette (default ${DEFAULT_LAZARETTE_ITEM}, or env TALKFORGE_LAZARETTE_ITEM)
   --idle-timeout <min> stop after this many minutes without a speech request (default 0 = never)
@@ -164,15 +167,28 @@ async function version(o) {
 }
 
 async function serve(o) {
-  const { token: raw, source } = await resolveToken({ from: o.tokenFrom, tokenFile: o.tokenFile, item: o.lazaretteItem });
-  const token = checkToken(raw);
-  console.error(`API token read from ${source}`); // the source only, never the value
+  // The token it was started with (env, --token-file, Lazarette), if any, plus the local token that apps
+  // of this account read from a file only they can open (tools/local-token.mjs). With neither asked for,
+  // the local token alone is enough: nothing to configure.
+  const explicit = o.tokenFrom || o.tokenFile || process.env.TALKFORGE_TOKEN;
+  let token;
+  if (explicit) {
+    const { token: raw, source } = await resolveToken({ from: o.tokenFrom, tokenFile: o.tokenFile, item: o.lazaretteItem });
+    token = checkToken(raw);
+    console.error(`API token read from ${source}`); // the source only, never the value
+  }
+  const tokens = [];
+  if (localTokenEnabled()) {
+    tokens.push(ensureLocalToken());
+    console.error(`Local token: ${localTokenPath()} (apps of this account read it; nothing to configure)`);
+  }
+  if (!token && !tokens.length) checkToken(undefined); // neither: the usual "a token is required" error
   const synth = createSynthesizer({ assets: o.assets, defaultVoice: o.voice ?? DEFAULT_VOICE, log: (m) => console.error(m) });
   await synth.load(o.voice ?? DEFAULT_VOICE); // fail fast, with the missing-file list, before listening
   let stopNow;
   const stopped = new Promise((r) => { stopNow = r; });
   const s = await startServer({
-    synth, token, port: o.port, log: (m) => console.error(m), version: readVersion(),
+    synth, token, tokens, port: o.port, log: (m) => console.error(m), version: readVersion(),
     scriptPath: fileURLToPath(import.meta.url), idleTimeoutMs: Math.round(o.idleTimeout * 60000), onStop: stopNow
   });
   console.log(`TalkForge speech endpoint: http://127.0.0.1:${s.port}/v1/audio/speech (loopback only, bearer token required)`);

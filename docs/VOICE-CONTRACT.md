@@ -68,6 +68,7 @@ Started with `talkforge serve [--port <n>] [--token-file <file>] [--voice <id>] 
 - **Bearer token on every request:** `Authorization: Bearer <token>`. The server will not start without a token of 16 or more characters, given by env `TALKFORGE_TOKEN` or the first line of `--token-file`. It is compared in constant time and never logged or printed. A missing or wrong token gives `401` with `WWW-Authenticate: Bearer`.
 - **Host and Origin rules.** The `Host` header must be `127.0.0.1:<port>`, `localhost:<port>` or `[::1]:<port>`; anything else gives `403` (blocks DNS rebinding). A request with any `Origin` header (a browser page) gives `403`. Call it from a program, not from a web page.
 - Per the Fleet credentials contract, the token lives in Lazarette and callers read it by name at start; it is not kept in config files. (TalkForge takes it from env or a file by default; `--token-from lazarette` reads it from the vault â€” full Lazarette, or Lazarette-Lite as a fallback â€” instead.)
+- **Local token (callers on the same account).** The server also accepts the token in `%LOCALAPPDATA%TalkForgelocal-token` (made on first `serve`, readable only by that Windows account; `$XDG_CONFIG_HOME/talkforge/local-token` elsewhere). A caller running as the same user reads the first line of that file and sends it as the bearer token: no vault item, no share. Callers that can read it should prefer it; a configured token still works.
 
 ### Request
 
