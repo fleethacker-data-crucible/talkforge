@@ -164,11 +164,18 @@ test('parseArgs: speak and serve options, usage errors', () => {
   assert.throws(() => parseArgs(['speak', '--host', '0.0.0.0']), /Unknown option/); // no host option exists
 });
 
-test('CLI: serve without a token exits 1; speak without text exits 64; speak with missing assets exits 2', () => {
-  const env = { ...process.env }; delete env.TALKFORGE_TOKEN;
+test('CLI: serve with no token at all (local token off) exits 1; with only the local token it gets past the token check; speak without text exits 64; speak with missing assets exits 2', () => {
+  const env = { ...process.env, TALKFORGE_LOCAL_TOKEN: 'off' }; delete env.TALKFORGE_TOKEN;
   const noToken = spawnSync(process.execPath, [CLI, 'serve', '--port', '0', '--assets', join(tmpdir(), 'tf-none')], { encoding: 'utf8', env });
   assert.equal(noToken.status, 1);
   assert.match(noToken.stderr, /token/);
+  // With the local token (in a temp file here) serve needs nothing configured: it stops later, at the missing assets.
+  const tokDir = mkdtempSync(join(tmpdir(), 'tf-lt-'));
+  try {
+    const localOnly = spawnSync(process.execPath, [CLI, 'serve', '--port', '0', '--assets', join(tokDir, 'none')], { encoding: 'utf8', env: { ...env, TALKFORGE_LOCAL_TOKEN: '', TALKFORGE_LOCAL_TOKEN_FILE: join(tokDir, 'local-token') } });
+    assert.equal(localOnly.status, 2, localOnly.stderr);
+    assert.match(localOnly.stderr, /Local token/);
+  } finally { rmSync(tokDir, { recursive: true, force: true }); }
   const noText = spawnSync(process.execPath, [CLI, 'speak', '--out', '-'], { encoding: 'utf8', input: '  ' });
   assert.equal(noText.status, 64);
   const dir = mkdtempSync(join(tmpdir(), 'tf-hl-'));
