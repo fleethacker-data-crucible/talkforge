@@ -17,7 +17,7 @@ env:
 jobs:
   unit:
     name: Node unit tests
-    runs-on: ubuntu-26.04
+    runs-on: [self-hosted, ubuntu-26.04, docker]
     steps:
       - uses: actions/checkout@v5
 
@@ -37,7 +37,7 @@ jobs:
 
   smoke:
     name: Offline synthesis smoke test
-    runs-on: ubuntu-26.04
+    runs-on: [self-hosted, ubuntu-26.04, docker]
     steps:
       - uses: actions/checkout@v5
 
