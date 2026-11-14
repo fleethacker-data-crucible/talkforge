@@ -4,7 +4,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { DEFAULT_ASSETS_DIR, DEFAULT_VOICE, MissingAssetsError } from './node-engine.mjs';
 import { createSynthesizer } from './synth-core.mjs';
 import { DEFAULT_PORT, checkToken, startServer } from './talkforge-server.mjs';
@@ -12,6 +12,7 @@ import { DEFAULT_LAZARETTE_ITEM, TokenError, resolveToken } from './token-provid
 import { ensureLocalToken, localTokenEnabled, localTokenPath } from './local-token.mjs';
 import { formatVoices, listVoices, voicesDocument } from './voices.mjs';
 import { DEFAULT_MANIFEST, assetsStatus, formatAssetsStatus } from './assets-status.mjs';
+import { actionManifest, commandsEnvelope, dryRunResult, findAction, formatCommandsText } from './commands.mjs';
 
 export const USAGE = `Usage:
   talkforge speak [text...] [options]    text from the arguments, or stdin when none (or "-")
@@ -20,6 +21,9 @@ export const USAGE = `Usage:
   talkforge version [--json]             the TalkForge version (from the VERSION file)
   talkforge assets status [--voice <id>] [--json] [--no-hash] [--manifest <file>] [--assets <dir>]
                                          preflight: are the files a voice needs present and verified? (never downloads)
+  talkforge commands [--json] [--out <file>]   list every noun-verb command (help is the same list)
+  talkforge <noun> <verb> [--<arg> <value>] [--json] [--out <file>] [--dry-run]
+                                         speech speak, speech serve, voice list, asset status, version show
 
 speak options:
   --out <file|->       output file, or - for stdout (default: stdout when piped; required on a terminal)
@@ -53,9 +57,99 @@ Exit codes: 0 ok, 1 error, 2 assets missing (nothing is downloaded), 64 bad usag
 
 class UsageError extends Error {}
 
+// Global flags shared by `commands` and the noun-verb actions. `--out` is the JSON file
+// (Fleet CLI), not the audio file; speech speak takes the audio path as `--file`.
+function parseGlobalFlags(rest) {
+  const o = { json: false, out: undefined, yes: false, dryRun: false, args: {}, positionals: [] };
+  const take = (i, flag) => {
+    if (i + 1 >= rest.length) throw new UsageError(`${flag} needs a value`);
+    return rest[i + 1];
+  };
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    if (a === '--json') { o.json = true; continue; }
+    if (a === '--yes') { o.yes = true; continue; }
+    if (a === '--dry-run') { o.dryRun = true; continue; }
+    if (a === '--out' || a.startsWith('--out=')) {
+      o.out = a === '--out' ? take(i, '--out') : a.slice('--out='.length);
+      if (a === '--out') i++;
+      if (!o.out) throw new UsageError('--out needs a value');
+      continue;
+    }
+    if (a.startsWith('--')) {
+      const body = a.slice(2);
+      const eq = body.indexOf('=');
+      const name = eq >= 0 ? body.slice(0, eq) : body;
+      const value = eq >= 0 ? body.slice(eq + 1) : take(i, a);
+      if (eq < 0) i++;
+      if (!name || name === 'json' || name === 'yes' || name === 'dry-run' || name === 'out') {
+        throw new UsageError(`Unknown option: ${a}`);
+      }
+      if (Object.prototype.hasOwnProperty.call(o.args, name)) throw new UsageError(`Repeated argument: --${name}`);
+      o.args[name] = value;
+      continue;
+    }
+    o.positionals.push(a);
+  }
+  return o;
+}
+
+function coerceArgs(action, raw) {
+  const spec = new Map(action.parameters.map((p) => [p.name, p]));
+  const args = {};
+  for (const [name, value] of Object.entries(raw)) {
+    const p = spec.get(name);
+    if (!p) throw new UsageError(`Unknown argument: --${name}`);
+    if (p.type === 'string') args[name] = value;
+    else if (p.type === 'number') {
+      const n = Number(value);
+      if (!Number.isFinite(n)) throw new UsageError(`--${name} must be a number, got "${value}"`);
+      args[name] = n;
+    } else if (p.type === 'boolean') {
+      if (value !== 'true' && value !== 'false') throw new UsageError(`--${name} must be true or false`);
+      args[name] = value === 'true';
+    }
+  }
+  for (const p of action.parameters) {
+    if (p.required && !Object.prototype.hasOwnProperty.call(args, p.name)) throw new UsageError(`Missing argument: --${p.name}`);
+  }
+  if (args.speed !== undefined && !(args.speed >= 0.25 && args.speed <= 4)) throw new UsageError('--speed must be from 0.25 to 4');
+  if (args.speaker !== undefined && (!Number.isInteger(args.speaker) || args.speaker < 0)) throw new UsageError('--speaker must be a non-negative integer');
+  if (args.format !== undefined && !['wav', 'mp3'].includes(args.format)) throw new UsageError('--format must be wav or mp3');
+  if (args.port !== undefined && !(Number.isInteger(args.port) && args.port >= 0 && args.port < 65536)) throw new UsageError('--port must be 0 to 65535');
+  if (typeof args.text === 'string' && !args.text.trim()) throw new UsageError('--text must be non-empty');
+  if (typeof args.file === 'string' && !args.file.trim()) throw new UsageError('--file must be non-empty');
+  return args;
+}
+
+function assetsDirOf(args) {
+  return args.assets || process.env.TALKFORGE_ASSETS || DEFAULT_ASSETS_DIR;
+}
+
 export function parseArgs(argv) {
   const [cmd, ...rest] = argv;
   if (!cmd || cmd === '-h' || cmd === '--help') return { cmd: 'help' };
+  if (cmd === 'commands' || cmd === 'help') {
+    const flags = parseGlobalFlags(rest);
+    if (flags.positionals.length) throw new UsageError(`${cmd} takes no arguments`);
+    return { cmd: 'commands', json: flags.json, out: flags.out, yes: flags.yes, dryRun: flags.dryRun };
+  }
+  if (cmd === 'speech' || cmd === 'voice' || cmd === 'asset' || (cmd === 'version' && rest[0] === 'show')) {
+    const noun = cmd;
+    const verb = rest[0];
+    if (!verb || verb.startsWith('--')) {
+      const known = actionManifest().actions.filter((a) => a.noun === noun).map((a) => a.verb);
+      throw new UsageError(`${noun} needs a verb${known.length ? ` (${known.join(', ')})` : ''}`);
+    }
+    const action = findAction(noun, verb);
+    if (!action) throw new UsageError(`Unknown command: ${noun} ${verb}`);
+    const flags = parseGlobalFlags(rest.slice(1));
+    if (flags.positionals.length) throw new UsageError(`Unexpected argument: ${flags.positionals[0]}`);
+    return {
+      cmd: 'fleet', noun, verb, action, args: coerceArgs(action, flags.args),
+      json: flags.json, out: flags.out, yes: flags.yes, dryRun: flags.dryRun
+    };
+  }
   if (!['speak', 'serve', 'voices', 'version', 'assets'].includes(cmd)) throw new UsageError(`Unknown command: ${cmd}`);
   const o = { cmd, text: [], out: undefined, voice: undefined, speed: 1, speaker: 0, format: undefined, port: DEFAULT_PORT,
     json: false, installed: false, noHash: false, manifest: DEFAULT_MANIFEST, tokenFile: undefined, tokenFrom: undefined, lazaretteItem: undefined, idleTimeout: 0, assets: process.env.TALKFORGE_ASSETS || DEFAULT_ASSETS_DIR };
@@ -198,12 +292,80 @@ async function serve(o) {
   await s.close();
 }
 
+// `--json` writes one result envelope to stdout. `--out` writes those same bytes to a file
+// (UTF-8, no byte-order mark). Without `--json`, stdout is the short text form.
+function emitDocument(o, envelope, text) {
+  const json = JSON.stringify(envelope) + '\n';
+  if (o.out) writeFileSync(o.out, json);
+  if (o.json) process.stdout.write(json);
+  else console.log(text);
+}
+
+async function runFleet(o) {
+  if (o.cmd === 'commands') {
+    emitDocument(o, commandsEnvelope(), formatCommandsText());
+    return 0;
+  }
+  const action = o.action;
+  if (o.dryRun) {
+    emitDocument(o, commandsEnvelope(dryRunResult(action, o.args, o.yes)), `dry-run ${action.id}`);
+    return 0;
+  }
+  if (action.id === 'talkforge.speech.serve' && (o.json || o.out)) {
+    throw new UsageError('speech serve runs until stopped and prints the endpoint URL. Use --dry-run to print the plan, or talkforge serve.');
+  }
+  const assets = assetsDirOf(o.args);
+  if (action.id === 'talkforge.speech.speak') {
+    const voice = o.args.voice ?? DEFAULT_VOICE;
+    const speaker = o.args.speaker ?? 0;
+    await checkVoice({ assets, speaker }, voice);
+    const format = o.args.format || (/\.mp3$/i.test(o.args.file) ? 'mp3' : 'wav');
+    const synth = createSynthesizer({ assets, defaultVoice: voice });
+    const r = await synth.render({ text: o.args.text, voice, speed: o.args.speed ?? 1, speaker, format });
+    const file = resolve(o.args.file);
+    await writeFile(file, r.bytes);
+    const result = { file, format, voice: r.voice, seconds: Number(r.seconds.toFixed(3)), sampleRate: r.sampleRate, bytes: r.bytes.length };
+    emitDocument(o, commandsEnvelope(result), `${r.seconds.toFixed(2)} s ${format} (${r.voice}) -> ${file}`);
+    return 0;
+  }
+  if (action.id === 'talkforge.speech.serve') {
+    await serve({
+      text: [], voice: o.args.voice, speed: 1, speaker: 0, port: o.args.port ?? DEFAULT_PORT, assets,
+      tokenFile: undefined, tokenFrom: undefined, lazaretteItem: undefined, idleTimeout: 0
+    });
+    return 0;
+  }
+  if (action.id === 'talkforge.voice.list') {
+    const doc = await voicesDocument(assets, { installedOnly: o.args.installed === true });
+    emitDocument(o, commandsEnvelope(doc), formatVoices(doc));
+    return 0;
+  }
+  if (action.id === 'talkforge.asset.status') {
+    let doc;
+    try {
+      doc = await assetsStatus({ assetsDir: assets, voice: o.args.voice ?? DEFAULT_VOICE, hash: o.args.hash !== false });
+    } catch (e) { if (e.code === 'UNKNOWN_VOICE') throw new UsageError(e.message); throw e; }
+    emitDocument(o, commandsEnvelope(doc), formatAssetsStatus(doc));
+    return doc.ok ? 0 : 2;
+  }
+  if (action.id === 'talkforge.version.show') {
+    const version = readVersion();
+    emitDocument(o, commandsEnvelope({ version, node: process.versions.node }), version);
+    return 0;
+  }
+  throw new UsageError(`Unknown command: ${o.noun} ${o.verb}`);
+}
+
 export async function main(argv) {
   let o;
   try { o = parseArgs(argv); }
   catch (e) { console.error(`Error: ${e.message}\n\n${USAGE}`); return 64; }
   if (o.cmd === 'help') { console.log(USAGE); return 0; }
   try {
+    if (o.cmd === 'commands' || o.cmd === 'fleet') {
+      const code = await runFleet(o);
+      return code || process.exitCode || 0;
+    }
     await ({ speak, serve, voices, version, assets }[o.cmd])(o);
     if (process.exitCode) return process.exitCode;
     return 0;

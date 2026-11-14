@@ -30,9 +30,11 @@ await test('version prints the VERSION file; --json has a schema', () => {
   assert.equal(run(['version', 'extra']).status, 64);
 });
 
-await test('parseArgs: --json allowed for voices, speak and version only; --installed only for voices', () => {
+await test('parseArgs: --json allowed for voices, speak, version, and the command registry; --installed only for voices', () => {
   assert.equal(parseArgs(['speak', 'hi', '--json', '--out', 'a.wav']).json, true);
   assert.equal(parseArgs(['version', '--json']).json, true);
+  assert.equal(parseArgs(['commands', '--json']).json, true);
+  assert.equal(parseArgs(['help', '--json']).cmd, 'commands');
   assert.throws(() => parseArgs(['serve', '--json']), /--json is for/);
   assert.throws(() => parseArgs(['speak', 'hi', '--installed']), /--installed belongs/);
 });

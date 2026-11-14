@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { MissingAssetsError } from './node-engine.mjs';
 import { MIME } from './synth-core.mjs';
 import { listVoices } from './voices.mjs';
+import { commandsEnvelope } from './commands.mjs';
 
 export const LOOPBACK = '127.0.0.1';
 export const DEFAULT_PORT = 25009; // last port of TalkForge's 25000-25009 block (the page server starts at 25000)
@@ -192,6 +193,14 @@ export function startServer({ synth, token, tokens = [], port = DEFAULT_PORT, lo
         if (req.method !== 'GET') return fail(res, 405, 'Use GET', { allow: 'GET' });
         const voices = await listVoices(synth.assetsDir, synth.defaultVoice);
         return sendJson(res, 200, { object: 'list', default: synth.defaultVoice, data: voices.map((v) => ({ id: v.id, installed: v.installed, default: v.default, speakers: v.speakers, sample_rate: v.sampleRate, language: v.language })) });
+      }
+      // Command registry. Same bearer, Host, and Origin rules as /v1/audio/speech (an Origin
+      // header is refused above). FleetAction's listener requires Origin; this server does not,
+      // because the speech contract forbids browser callers. A query string is refused.
+      if (path === '/api/v1/actions') {
+        if (req.url.includes('?')) return fail(res, 400, 'Query string is not allowed');
+        if (req.method !== 'GET') return fail(res, 405, 'Use GET', { allow: 'GET' });
+        return sendJson(res, 200, commandsEnvelope(), { 'content-type': 'application/json; charset=utf-8' });
       }
       if (path !== '/v1/audio/speech') return fail(res, 404, 'Not found');
       if (req.method !== 'POST') return fail(res, 405, 'Use POST', { allow: 'POST' });
