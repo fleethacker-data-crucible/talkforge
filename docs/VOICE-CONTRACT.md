@@ -28,6 +28,8 @@ talkforge speak [text...] [--out <file|->] [--voice <id>] [--speed <n>] [--speak
 
 Also: `talkforge version [--json]` (`talkforge.version/1`) and `talkforge voices list [--json] [--installed]` (`talkforge.voices/1`).
 
+**Command registry.** `talkforge commands [--json] [--out <file>]` lists the noun-verb names an agent can chain. `talkforge help` prints the same list. `--json` is one FleetAction result envelope (`{"v":1,"ok":true,"result":{...}}`); `--out` writes those same UTF-8 bytes with no byte-order mark. The names are `speech speak`, `speech serve`, `voice list`, `asset status`, and `version show`. They call the same engine as `talkforge speak`, `serve`, `voices list`, `assets status`, and `version`. `speech speak` takes `--text` and `--file` (the audio path). `--dry-run` checks the arguments and does not speak. `GET /api/v1/actions` returns the same envelope and uses the bearer, Host, and Origin rules on this page.
+
 **Exit codes.** `0` ok; `1` error (engine failure, silent output); `2` assets missing (stderr lists each missing file; nothing is downloaded); `64` bad usage (unknown option, no text, audio to a terminal).
 
 ```bash
@@ -125,4 +127,4 @@ Fairlead routes `/v1/audio/speech` to this endpoint. Configure it like any other
 
 ### Lifecycle probes
 
-(Added by the lifecycle change; absent until it is merged.) `GET /__fleethacker/id` (`tool`, `version`, `pid`, `path`) and `GET /__fleethacker/heartbeat` (`ok`, `uptimeSeconds`, `lastRequestAt`, `requests`) need no token; `POST /__fleethacker/shutdown` needs the token and the header `X-FleetHacker-Shutdown: 1`. `talkforge serve --idle-timeout <minutes>` stops the server after that long without a speech request. The `Host` rule above applies to all of them.
+`GET /__fleethacker/id` (`tool`, `version`, `pid`, `path`) and `GET /__fleethacker/heartbeat` (`ok`, `uptimeSeconds`, `lastRequestAt`, `requests`) need no token; `POST /__fleethacker/shutdown` needs the token and the header `X-FleetHacker-Shutdown: 1`. `talkforge serve --idle-timeout <minutes>` stops the server after that long without a speech request. The `Host` rule above applies to all of them.
